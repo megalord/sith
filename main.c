@@ -125,6 +125,13 @@ int read_empty (stream_t *stream) {
   }
 }
 
+void read_comment (stream_t *stream) {
+  buffer_t buf = buf_create(64);
+  stream_read(stream); // ;
+  read_until(stream, &buf, '\n');
+  stream_read(stream); // \n
+}
+
 int read_atom (stream_t *stream, atom_t *atom) {
   buffer_t str;
   int c = stream_peek(stream);
@@ -187,14 +194,18 @@ int read_node (stream_t *stream, node_t *node) {
     fprintf(stderr, "unexpected eof\n");
     return 1;
   }
-  if (c == '(') {
-    node->type = NODE_LIST;
-    node->list = malloc(sizeof(list_t));
-    return read_list(stream, node->list);
-  } else {
-    node->type = NODE_ATOM;
-    node->atom = malloc(sizeof(atom_t));
-    return read_atom(stream, node->atom);
+  switch (c) {
+    case ';':
+      read_comment(stream);
+      return read_node(stream, node);
+    case '(':
+      node->type = NODE_LIST;
+      node->list = malloc(sizeof(list_t));
+      return read_list(stream, node->list);
+    default:
+      node->type = NODE_ATOM;
+      node->atom = malloc(sizeof(atom_t));
+      return read_atom(stream, node->atom);
   }
 }
 
@@ -211,7 +222,7 @@ void print_node (node_t *node, int depth) {
 }
 
 void print_fn (list_t *list) {
-  printf("void %s () {\n", list->fst->atom->name);
+  printf("int %s () {\n", list->fst->atom->name);
 }
 
 void print_fn_call (list_t *list) {
@@ -232,8 +243,19 @@ int print_c (node_t *node) {
   curr = curr->next;
   print_fn(curr->list);
   curr = curr->next;
-  printf("  ");
-  print_fn_call(curr->list);
+  while (curr != NULL) {
+    printf("  ");
+    if (curr->next == NULL) {
+      printf("return ");
+    }
+
+    if (curr->type == NODE_LIST) {
+      print_fn_call(curr->list);
+    } else if (curr->type == NODE_ATOM) {
+      printf("%s;\n", curr->atom->name);
+    }
+    curr = curr->next;
+  }
   printf("}\n");
   return 0;
 }

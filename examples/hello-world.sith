@@ -1,2 +1,6 @@
+; #include <stdio.h>
+
 (defun (main)
-  (puts "hello world"))
+  (puts "hello world")
+  ; implicit returns
+  0)
