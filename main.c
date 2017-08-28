@@ -67,7 +67,8 @@ int stream_read (stream_t *stream) {
 }
 
 typedef enum {
-  ATOM_IDENTIFIER
+  ATOM_IDENTIFIER,
+  ATOM_STRING
 } atom_type_t;
 
 typedef struct {
@@ -137,12 +138,14 @@ int read_atom (stream_t *stream, atom_t *atom) {
   int c = stream_peek(stream);
   switch (c) {
     case '"':
+      atom->type = ATOM_STRING;
       str = buf_create(16);
-      buf_write_char(&str, (char)stream_read(stream));
+      stream_read(stream);
       read_until(stream, &str, '"');
-      buf_write_char(&str, (char)stream_read(stream));
+      stream_read(stream);
       break;
     default:
+      atom->type = ATOM_IDENTIFIER;
       str = buf_create(16);
       while (1) {
         int d = stream_peek(stream);
@@ -153,7 +156,6 @@ int read_atom (stream_t *stream, atom_t *atom) {
       }
   }
   atom->name = str.data;
-  atom->type = ATOM_IDENTIFIER;
   return 0;
 }
 
@@ -169,7 +171,7 @@ int read_list (stream_t *stream, list_t *list) {
     c = stream_peek(stream);
     if (c == EOF || c == -2 || c == ')') {
       stream_read(stream);
-      return 0;
+      break;
     } else if (c == ' ') {
       stream_read(stream);
     } else {
@@ -229,7 +231,13 @@ void print_fn_call (list_t *list) {
   node_t *node = list->fst;
   printf("%s(", node->atom->name);
   node = node->next;
+  if (node->atom->type == ATOM_STRING) {
+    printf("\"");
+  }
   printf("%s", node->atom->name);
+  if (node->atom->type == ATOM_STRING) {
+    printf("\"");
+  }
   printf(");\n");
 }
 
@@ -240,23 +248,40 @@ int print_c (node_t *node) {
     return 1;
   }
   curr = node->list->fst; //defun
-  curr = curr->next;
-  print_fn(curr->list);
-  curr = curr->next;
-  while (curr != NULL) {
-    printf("  ");
-    if (curr->next == NULL) {
-      printf("return ");
-    }
-
-    if (curr->type == NODE_LIST) {
-      print_fn_call(curr->list);
-    } else if (curr->type == NODE_ATOM) {
-      printf("%s;\n", curr->atom->name);
-    }
-    curr = curr->next;
+  if (curr->type != NODE_ATOM) {
+    fprintf(stderr, "expected atom\n");
+    return 1;
   }
-  printf("}\n");
+  if (strcmp(curr->atom->name, "defun") == 0) {
+    curr = curr->next;
+    print_fn(curr->list);
+    curr = curr->next;
+    while (curr != NULL) {
+      printf("  ");
+      if (curr->next == NULL) {
+        printf("return ");
+      }
+
+      if (curr->type == NODE_LIST) {
+        print_fn_call(curr->list);
+      } else if (curr->type == NODE_ATOM) {
+        printf("%s;\n", curr->atom->name);
+      }
+      curr = curr->next;
+    }
+    printf("}\n");
+  } else if (strcmp(curr->atom->name, "include") == 0) {
+    curr = curr->next;
+    if (curr->type != NODE_ATOM) {
+      fprintf(stderr, "expected atom\n");
+      return 1;
+    }
+    if (curr->atom->type != ATOM_STRING) {
+      fprintf(stderr, "expected string\n");
+      return 1;
+    }
+    printf("#include <%s>\n", curr->atom->name);
+  }
   return 0;
 }
 
@@ -283,9 +308,13 @@ int main (int argc, char **argv) {
 
   read_empty(&stream);
   node_t node;
-  read_node(&stream, &node);
-  //print_node(&node, 0);
-  print_c(&node);
+  while (1) {
+    if (read_node(&stream, &node) != 0) {
+      break;
+    }
+    //print_node(&node, 0);
+    print_c(&node);
+  }
 
   fclose(f);
   return 0;
