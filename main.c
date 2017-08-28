@@ -270,6 +270,43 @@ void print_fn_call (list_t *list) {
   printf(");\n");
 }
 
+int print_c_fn (node_t *node) {
+  if (node->type != NODE_LIST) {
+    fprintf(stderr, "expected list\n");
+    return 1;
+  }
+  print_fn(node->list);
+  node = node->next;
+  while (node != NULL) {
+    printf("  ");
+    if (node->next == NULL) {
+      printf("return ");
+    }
+
+    if (node->type == NODE_LIST) {
+      print_fn_call(node->list);
+    } else if (node->type == NODE_ATOM) {
+      printf("%s;\n", node->atom->name);
+    }
+    node = node->next;
+  }
+  printf("}\n");
+  return 0;
+}
+
+int print_c_include (node_t *node) {
+  if (node->type != NODE_ATOM) {
+    fprintf(stderr, "expected atom\n");
+    return 1;
+  }
+  if (node->atom->type != ATOM_STRING) {
+    fprintf(stderr, "expected string\n");
+    return 1;
+  }
+  printf("#include <%s>\n", node->atom->name);
+  return 0;
+}
+
 int print_c (node_t *node) {
   node_t *curr;
   if (node->type != NODE_LIST) {
@@ -282,38 +319,9 @@ int print_c (node_t *node) {
     return 1;
   }
   if (strcmp(curr->atom->name, "defun") == 0) {
-    curr = curr->next;
-    if (curr->type != NODE_LIST) {
-      fprintf(stderr, "expected list\n");
-      return 1;
-    }
-    print_fn(curr->list);
-    curr = curr->next;
-    while (curr != NULL) {
-      printf("  ");
-      if (curr->next == NULL) {
-        printf("return ");
-      }
-
-      if (curr->type == NODE_LIST) {
-        print_fn_call(curr->list);
-      } else if (curr->type == NODE_ATOM) {
-        printf("%s;\n", curr->atom->name);
-      }
-      curr = curr->next;
-    }
-    printf("}\n");
+    print_c_fn(curr->next);
   } else if (strcmp(curr->atom->name, "include") == 0) {
-    curr = curr->next;
-    if (curr->type != NODE_ATOM) {
-      fprintf(stderr, "expected atom\n");
-      return 1;
-    }
-    if (curr->atom->type != ATOM_STRING) {
-      fprintf(stderr, "expected string\n");
-      return 1;
-    }
-    printf("#include <%s>\n", curr->atom->name);
+    print_c_include(curr->next);
   }
   return 0;
 }
