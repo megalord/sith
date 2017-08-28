@@ -1,6 +1,10 @@
 (include "stdio.h")
 
-(defun (main)
+(defun (hello asdf)
   (puts "hello world")
+  0)
+
+(defun (main)
+  (hello)
   ; implicit returns
   0)

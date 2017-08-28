@@ -223,20 +223,49 @@ void print_node (node_t *node, int depth) {
   }
 }
 
-void print_fn (list_t *list) {
-  printf("int %s () {\n", list->fst->atom->name);
+int print_fn (list_t *list) {
+  node_t *node = list->fst;
+  if (node->type != NODE_ATOM) {
+    fprintf(stderr, "expected atom\n");
+    return 1;
+  }
+  printf("int %s (", node->atom->name);
+  /*
+   * TODO: arguments
+  node = node->next;
+  while (node != NULL) {
+    if (node->type != NODE_ATOM) {
+      fprintf(stderr, "expected atom\n");
+      return 1;
+    }
+    printf("%s", node->atom->name);
+    node = node->next;
+    if (node != NULL) {
+      printf(", ");
+    }
+  }
+  */
+  printf(") {\n");
+  return 0;
 }
 
 void print_fn_call (list_t *list) {
   node_t *node = list->fst;
   printf("%s(", node->atom->name);
   node = node->next;
-  if (node->atom->type == ATOM_STRING) {
-    printf("\"");
-  }
-  printf("%s", node->atom->name);
-  if (node->atom->type == ATOM_STRING) {
-    printf("\"");
+  while (node != NULL) {
+    if (node->type == NODE_ATOM) {
+      if (node->atom->type == ATOM_STRING) {
+        printf("\"");
+      }
+      printf("%s", node->atom->name);
+      if (node->atom->type == ATOM_STRING) {
+        printf("\"");
+      }
+    } else if (node->type == NODE_LIST) {
+      print_fn_call(node->list); // TODO: fix indentation
+    }
+    node = node->next;
   }
   printf(");\n");
 }
@@ -254,6 +283,10 @@ int print_c (node_t *node) {
   }
   if (strcmp(curr->atom->name, "defun") == 0) {
     curr = curr->next;
+    if (curr->type != NODE_LIST) {
+      fprintf(stderr, "expected list\n");
+      return 1;
+    }
     print_fn(curr->list);
     curr = curr->next;
     while (curr != NULL) {
