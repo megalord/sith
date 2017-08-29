@@ -2,13 +2,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "main.h"
 
 int INDENTATION = 2;
-
-typedef struct {
-  int rem, size;
-  char *data;
-} buffer_t;
 
 buffer_t buf_create (int size) {
   buffer_t buf = { .rem = size - 1, .size = size };
@@ -45,11 +41,6 @@ void buf_write_char (buffer_t *buf, char x) {
   buf->data[buf->size - 1 - buf->rem] = '\0';
 }
 
-typedef struct {
-  FILE *source;
-  int next;
-} stream_t;
-
 int stream_peek (stream_t *stream) {
   if (stream->next != -2) {
     return stream->next;
@@ -68,40 +59,6 @@ int stream_read (stream_t *stream) {
   } else {
     return fgetc(stream->source);
   }
-}
-
-typedef enum {
-  ATOM_IDENTIFIER,
-  ATOM_STRING
-} atom_type_t;
-
-typedef struct {
-  char *name;
-  atom_type_t type;
-} atom_t;
-
-struct node_t;
-typedef struct {
-  int len;
-  struct node_t *fst;
-} list_t;
-
-typedef enum {
-  NODE_ATOM,
-  NODE_LIST
-} node_type_t;
-
-typedef struct node_t {
-  node_type_t type;
-  atom_t *atom;
-  list_t *list;
-  struct node_t *next;
-} node_t;
-
-void read_alpha () {
-}
-
-void read_num () {
 }
 
 void read_until (stream_t *stream, buffer_t *buf, int d) {
@@ -163,7 +120,6 @@ int read_atom (stream_t *stream, atom_t *atom) {
   return 0;
 }
 
-int read_node (stream_t *stream, node_t *node);
 int read_list (stream_t *stream, list_t *list) {
   int c = stream_read(stream);
   if (c != '(') {
@@ -270,7 +226,6 @@ void transform_fn_name(char *input, char **output) {
   }
 }
 
-int print_fn_call (list_t *list, int depth);
 int print_statement (node_t *node, int depth) {
   if (node->type == NODE_LIST) {
     if (print_fn_call(node->list, depth) != 0) {
