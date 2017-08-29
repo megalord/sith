@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+int INDENTATION = 2;
+
 typedef struct {
   int rem, size;
   char *data;
@@ -217,7 +219,7 @@ void print_node (node_t *node, int depth) {
     printf("%*s atom: %s\n", depth, "", node->atom->name);
   } else if (node->type == NODE_LIST) {
     printf("%*s list: %d\n", depth, "", node->list->len);
-    print_node(node->list->fst, depth + 2);
+    print_node(node->list->fst, depth + 1);
   }
   if (node->next != NULL) {
     print_node(node->next, depth);
@@ -236,7 +238,7 @@ bool is_infix(char *input) {
 
 void transform_fn_name(char *input, char **output) {
   *output = malloc(32);
-  //*output[0] = '\0';
+  (*output)[0] = '\0';
   if (strcmp(input, "lt") == 0) {
     strncpy(*output, "<", 31);
   } else if (strcmp(input, "lte") == 0) {
@@ -256,7 +258,7 @@ void transform_fn_name(char *input, char **output) {
   }
 }
 
-int print_fn_call (list_t *list);
+int print_fn_call (list_t *list, int depth);
 void print_fn_call_infix (node_t *node) {
   char *operator;
   transform_fn_name(node->atom->name, &operator);
@@ -264,55 +266,53 @@ void print_fn_call_infix (node_t *node) {
   if (node->type == NODE_ATOM) {
     printf("%s", node->atom->name);
   } else if (node->type == NODE_LIST) {
-    print_fn_call(node->list);
+    print_fn_call(node->list, 0);
   }
   printf(" %s ", operator);
   node = node->next;
   if (node->type == NODE_ATOM) {
     printf("%s", node->atom->name);
   } else if (node->type == NODE_LIST) {
-    print_fn_call(node->list);
+    print_fn_call(node->list, 0);
   }
   free(operator);
 }
 
-int print_if (list_t *list) {
+int print_if (list_t *list, int depth) {
   if (list->len != 3 && list->len != 4) {
     fprintf(stderr, "invalid if\n");
     return 1;
   }
-  printf("if (");
+  printf("%*sif (", depth, "");
   node_t *node = list->fst->next; // skip if
   if (node->type != NODE_LIST) {
     fprintf(stderr, "if conditional must be a list\n");
     return 1;
   }
-  print_fn_call(node->list);
+  print_fn_call(node->list, 0);
   printf(") {\n");
   node = node->next;
   if (node->type != NODE_LIST) {
     fprintf(stderr, "if body must be a list\n");
     return 1;
   }
-  printf("    ");
-  print_fn_call(node->list);
+  print_fn_call(node->list, depth + INDENTATION);
   printf(";\n");
   if (list->len == 4) {
-    printf("  } else {\n");
+    printf("%*s} else {\n", depth, "");
     node = node->next;
     if (node->type != NODE_LIST) {
       fprintf(stderr, "else body must be a list\n");
       return 1;
     }
-    printf("    ");
-    print_fn_call(node->list);
+    print_fn_call(node->list, depth + INDENTATION);
     printf(";\n");
   }
-  printf("  }");
+  printf("%*s}", depth, "");
   return 0;
 }
 
-int print_fn_call (list_t *list) {
+int print_fn_call (list_t *list, int depth) {
   node_t *node = list->fst;
   if (node->type != NODE_ATOM) {
     fprintf(stderr, "function call must start with atom\n");
@@ -323,12 +323,12 @@ int print_fn_call (list_t *list) {
     return 0;
   }
   if (strcmp(node->atom->name, "if") == 0) {
-    return print_if(list);
+    return print_if(list, depth);
   }
 
   char *name;
   transform_fn_name(node->atom->name, &name);
-  printf("%s(", name);
+  printf("%*s%s(", depth, "", name);
   node = node->next;
   while (node != NULL) {
     if (node->type == NODE_ATOM) {
@@ -340,7 +340,7 @@ int print_fn_call (list_t *list) {
         printf("\"");
       }
     } else if (node->type == NODE_LIST) {
-      if (print_fn_call(node->list) != 0) { // TODO: fix indentation
+      if (print_fn_call(node->list, depth + INDENTATION) != 0) { // TODO: fix indentation
         return 1;
       }
     }
@@ -363,14 +363,11 @@ int print_c_fn_body (node_t *node) {
       if (node->type == NODE_ATOM && strcmp(node->atom->name, "void") == 0) {
         return 0;
       }
-      printf("  ");
-      printf("return ");
-    } else {
-      printf("  ");
+      printf("  return ");
     }
 
     if (node->type == NODE_LIST) {
-      if (print_fn_call(node->list) != 0) {
+      if (print_fn_call(node->list, INDENTATION) != 0) {
         return 1;
       }
       printf(";\n");
