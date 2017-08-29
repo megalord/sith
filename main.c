@@ -223,32 +223,6 @@ void print_node (node_t *node, int depth) {
   }
 }
 
-int print_fn (list_t *list) {
-  node_t *node = list->fst;
-  if (node->type != NODE_ATOM) {
-    fprintf(stderr, "expected atom\n");
-    return 1;
-  }
-  printf("int %s (", node->atom->name);
-  /*
-   * TODO: arguments
-  node = node->next;
-  while (node != NULL) {
-    if (node->type != NODE_ATOM) {
-      fprintf(stderr, "expected atom\n");
-      return 1;
-    }
-    printf("%s", node->atom->name);
-    node = node->next;
-    if (node != NULL) {
-      printf(", ");
-    }
-  }
-  */
-  printf(") {\n");
-  return 0;
-}
-
 void print_fn_call (list_t *list) {
   node_t *node = list->fst;
   printf("%s(", node->atom->name);
@@ -266,21 +240,27 @@ void print_fn_call (list_t *list) {
       print_fn_call(node->list); // TODO: fix indentation
     }
     node = node->next;
+    if (node != NULL) {
+      printf(", ");
+    }
   }
   printf(");\n");
 }
 
-int print_c_fn (node_t *node) {
-  if (node->type != NODE_LIST) {
-    fprintf(stderr, "expected list\n");
+int print_c_fn_body (node_t *node) {
+  if (node == NULL) {
+    fprintf(stderr, "empty function body\n");
     return 1;
   }
-  print_fn(node->list);
-  node = node->next;
   while (node != NULL) {
-    printf("  ");
     if (node->next == NULL) {
+      if (node->type == NODE_ATOM && strcmp(node->atom->name, "void") == 0) {
+        return 0;
+      }
+      printf("  ");
       printf("return ");
+    } else {
+      printf("  ");
     }
 
     if (node->type == NODE_LIST) {
@@ -289,6 +269,88 @@ int print_c_fn (node_t *node) {
       printf("%s;\n", node->atom->name);
     }
     node = node->next;
+  }
+  return 0;
+}
+
+int print_c_fn (node_t *sig_node, node_t *defun_node) {
+  if (sig_node->type != NODE_LIST || defun_node->type != NODE_LIST) {
+    fprintf(stderr, "expected two lists\n");
+    return 1;
+  }
+  if (sig_node->list->len != 3) {
+    fprintf(stderr, "invalid type definition\n");
+    return 1;
+  }
+  sig_node = sig_node->list->fst;
+  if (sig_node->type != NODE_ATOM || strcmp(sig_node->atom->name, ":") != 0) {
+    fprintf(stderr, "expected ':' atom\n");
+    return 1;
+  }
+  sig_node = sig_node->next;
+  if (sig_node->type != NODE_ATOM) {
+    fprintf(stderr, "invalid function name\n");
+    return 1;
+  }
+  char *fn_name = sig_node->atom->name;
+  sig_node = sig_node->next;
+  if (sig_node->type != NODE_LIST) {
+    fprintf(stderr, "type signature must be a function\n");
+    return 1;
+  }
+  if (sig_node->list->len < 2) {
+    fprintf(stderr, "invalid function type definition\n");
+    return 1;
+  }
+  node_t *node = sig_node->list->fst;
+  if (node->type != NODE_ATOM || strcmp(node->atom->name, "->") != 0) {
+    fprintf(stderr, "expected '->' atom\n");
+    return 1;
+  }
+  node = node->next;
+  if (node->type != NODE_ATOM) {
+    fprintf(stderr, "lambdas not supported\n");
+    return 1;
+  }
+  printf("%s %s (", node->atom->name, fn_name);
+  defun_node = defun_node->list->fst;
+  if (defun_node->type != NODE_ATOM || strcmp(defun_node->atom->name, "defun") != 0) {
+    fprintf(stderr, "function definition must follow type definition\n");
+    return 1;
+  }
+  defun_node = defun_node->next;
+  if (sig_node->list->len - 1 != defun_node->list->len) {
+    fprintf(stderr, "%d %d\n", sig_node->list->len, defun_node->list->len);
+    fprintf(stderr, "type definition doesn't match function signature\n");
+    return 1;
+  }
+  int num_args = defun_node->list->len - 1;
+  node_t *arg_node = defun_node->list->fst;
+  if (arg_node->type != NODE_ATOM) {
+    fprintf(stderr, "invalid function name\n");
+    return 1;
+  }
+  if (strcmp(fn_name, arg_node->atom->name) != 0) {
+    fprintf(stderr, "function name doesn't match type definition\n");
+    return 1;
+  }
+  arg_node = arg_node->next; // first argument
+  node = node->next;
+  for (int i = 0; i < num_args; i++) {
+    if (i != 0) {
+      printf(", ");
+    }
+    if (arg_node->type != NODE_ATOM || node->type != NODE_ATOM) {
+      fprintf(stderr, "lambdas not supported\n");
+      return 1;
+    }
+    printf("%s %s", node->atom->name, arg_node->atom->name);
+    arg_node = arg_node->next;
+    node = node->next;
+  }
+  printf(") {\n");
+  if (print_c_fn_body(defun_node->next) != 0) {
+    return 1;
   }
   printf("}\n");
   return 0;
@@ -313,22 +375,53 @@ int print_c (node_t *node) {
     fprintf(stderr, "expected list\n");
     return 1;
   }
-  curr = node->list->fst; //defun
+  curr = node->list->fst;
   if (curr->type != NODE_ATOM) {
     fprintf(stderr, "expected atom\n");
     return 1;
   }
-  if (strcmp(curr->atom->name, "defun") == 0) {
-    print_c_fn(curr->next);
+  if (strcmp(curr->atom->name, ":") == 0) {
+    return print_c_fn(node, node->next);
+  } else if (strcmp(curr->atom->name, "defun") == 0) {
+    // typeless functions are not yet supported
+    return 0;
   } else if (strcmp(curr->atom->name, "include") == 0) {
-    print_c_include(curr->next);
+    return print_c_include(curr->next);
   }
   return 0;
 }
 
-int main (int argc, char **argv) {
-  FILE *f;
+int parse (char *filename, list_t *root) {
+  FILE *f = fopen(filename, "r");
+  if (f == NULL) {
+    perror("Error reading file");
+    return 1;
+  }
 
+  stream_t stream = { .source = f, .next = -2 };
+
+  read_empty(&stream);
+  node_t *node, *prev = NULL;
+  while (1) {
+    node = malloc(sizeof(node_t));
+    if (read_node(&stream, node) != 0) {
+      free(node);
+      break;
+    }
+    if (prev == NULL) {
+      root->fst = node;
+    } else {
+      prev->next = node;
+    }
+    root->len++;
+    prev = node;
+  }
+
+  fclose(f);
+  return 0;
+}
+
+int main (int argc, char **argv) {
   if (argc != 3) {
     fprintf(stderr, "wrong number of args\n");
     return 1;
@@ -339,24 +432,20 @@ int main (int argc, char **argv) {
     return 1;
   }
 
-  f = fopen(argv[2], "r");
-  if (f == NULL) {
-    perror("Error reading file");
-    return 1;
+  node_t root;
+  root.type = NODE_LIST;
+  root.list = malloc(sizeof(list_t));
+  root.list->len = 0;
+  root.list->fst = NULL;
+  parse(argv[2], root.list);
+
+  //print_node(&root, 0);
+  //return 0;
+
+  node_t *node = root.list->fst;
+  while (node != NULL) {
+    print_c(node);
+    node = node->next;
   }
-
-  stream_t stream = { .source = f, .next = -2 };
-
-  read_empty(&stream);
-  node_t node;
-  while (1) {
-    if (read_node(&stream, &node) != 0) {
-      break;
-    }
-    //print_node(&node, 0);
-    print_c(&node);
-  }
-
-  fclose(f);
   return 0;
 }
