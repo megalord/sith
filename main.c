@@ -22,6 +22,7 @@ void buf_grow (buffer_t *buf) {
   char *data = malloc(buf->size * 2 * sizeof(char));
   memcpy(data, buf->data, buf->size);
   free(buf->data);
+  buf->size += buf->size;
   buf->data = data;
 }
 
@@ -426,6 +427,45 @@ int print_for (list_t *list, int depth) {
   return 0;
 }
 
+int print_case (list_t *list, int depth) {
+  if (list->len < 3) {
+    fprintf(stderr, "invalid case - needs at least 2 statements, has %d\n", list->len - 1);
+    return 1;
+  }
+  printf("%*sswitch (", depth, "");
+  node_t *node = list->fst->next; // skip case
+  print_statement(node, 0);
+  printf(") {\n");
+
+  node = node->next;
+  node_t *clause;
+  while (node != NULL) {
+    if (node->type != NODE_LIST) {
+      fprintf(stderr, "case clause must be a list\n");
+      return 1;
+    }
+    clause = node->list->fst;
+    if (clause->type == NODE_ATOM && strcmp(clause->atom->name, "else") == 0) {
+      printf("%*sdefault:\n", depth + INDENTATION, "");
+    } else {
+      printf("%*scase ", depth + INDENTATION, "");
+      print_statement(clause, 0);
+      printf(":\n");
+    }
+
+    clause = clause->next;
+    if (clause->type != NODE_LIST) {
+      fprintf(stderr, "case situation body must be a list\n");
+      return 1;
+    }
+    print_fn_call(clause->list, depth + 2 * INDENTATION);
+    printf(";\n%*sbreak;\n", depth + 2 * INDENTATION, "");
+    node = node->next;
+  }
+  printf("%*s}", depth, "");
+  return 0;
+}
+
 int print_fn_call (list_t *list, int depth) {
   node_t *node = list->fst;
   if (node->type != NODE_ATOM) {
@@ -447,6 +487,9 @@ int print_fn_call (list_t *list, int depth) {
   }
   if (strcmp(node->atom->name, "for") == 0) {
     return print_for(list, depth);
+  }
+  if (strcmp(node->atom->name, "case") == 0) {
+    return print_case(list, depth);
   }
   if (strcmp(node->atom->name, "progn") == 0) {
     node = node->next;

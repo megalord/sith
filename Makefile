@@ -6,6 +6,11 @@ hello-world: sith
 	gcc examples/hello-world.c -o examples/hello-world
 	./examples/hello-world
 
+case: sith
+	sith build examples/case.sith > examples/case.c
+	gcc examples/case.c -o examples/case
+	./examples/case
+
 conditionals: sith
 	sith build examples/conditionals.sith > examples/conditionals.c
 	gcc examples/conditionals.c -o examples/conditionals
