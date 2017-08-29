@@ -237,6 +237,8 @@ bool is_infix(char *input) {
   } else if (strcmp(input, "+") == 0 || strcmp(input, "-") == 0 || strcmp(input, "*") == 0 ||
       strcmp(input, "/") == 0) {
     return true;
+  } else if (strcmp(input, "and") == 0 || strcmp(input, "or") == 0) {
+    return true;
   }
   return false;
 }
@@ -258,6 +260,10 @@ void transform_fn_name(char *input, char **output) {
     strncpy(*output, "!=", 31);
   } else if (strcmp(input, "set") == 0) {
     strncpy(*output, "=", 31);
+  } else if (strcmp(input, "and") == 0) {
+    strncpy(*output, "&&", 31);
+  } else if (strcmp(input, "or") == 0) {
+    strncpy(*output, "||", 31);
   } else {
     strncpy(*output, input, 31);
   }
