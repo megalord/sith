@@ -11,6 +11,11 @@ conditionals: sith
 	gcc examples/conditionals.c -o examples/conditionals
 	./examples/conditionals hello world
 
+loops: sith
+	sith build examples/loops.sith > examples/loops.c
+	gcc examples/loops.c -o examples/loops
+	./examples/loops
+
 progn: sith
 	sith build examples/progn.sith > examples/progn.c
 	gcc examples/progn.c -o examples/progn

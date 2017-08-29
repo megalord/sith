@@ -1,0 +1,13 @@
+(include "stdio.h")
+
+(: main (-> int))
+(defun (main)
+  (def int i 0)
+  (while (lt i 3)
+    (progn
+      (printf "while: %d\n" i)
+      (set i (+ i 1))))
+
+  (for (def int j 0) (lt j 3) (set j (+ j 1))
+    (printf "for %d\n" j))
+  0)

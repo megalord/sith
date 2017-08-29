@@ -234,6 +234,9 @@ bool is_infix(char *input) {
     return true;
   } else if (strcmp(input, "set") == 0) {
     return true;
+  } else if (strcmp(input, "+") == 0 || strcmp(input, "-") == 0 || strcmp(input, "*") == 0 ||
+      strcmp(input, "/") == 0) {
+    return true;
   }
   return false;
 }
@@ -272,14 +275,14 @@ int print_statement (node_t *node, int depth) {
   return 0;
 }
 
-void print_fn_call_infix (node_t *node) {
+void print_fn_call_infix (node_t *node, int depth) {
   char *operator;
   transform_fn_name(node->atom->name, &operator);
   node = node->next;
   if (node->type == NODE_ATOM) {
-    printf("%s", node->atom->name);
+    printf("%*s%s", depth, "", node->atom->name);
   } else if (node->type == NODE_LIST) {
-    print_fn_call(node->list, 0);
+    print_fn_call(node->list, depth);
   }
   printf(" %s ", operator);
   node = node->next;
@@ -289,6 +292,35 @@ void print_fn_call_infix (node_t *node) {
     print_fn_call(node->list, 0);
   }
   free(operator);
+}
+
+int print_def (list_t *list, int depth) {
+  if (list->len != 3 && list->len != 4) {
+    fprintf(stderr, "invalid def - needs 2 or 3 arguments, has %d\n", list->len - 1);
+    return 1;
+  }
+  node_t *node = list->fst->next; // skip def
+  if (node->type != NODE_ATOM) {
+    fprintf(stderr, "def type must be an atom\n");
+    return 1;
+  }
+  printf("%*s%s ", depth, "", node->atom->name);
+
+  node = node->next;
+  if (node->type != NODE_ATOM) {
+    fprintf(stderr, "def variable name must be an atom\n");
+    return 1;
+  }
+  printf("%s", node->atom->name);
+
+  if (list->len == 4) {
+    node = node->next;
+    printf(" = ");
+    if (print_statement(node, 0) != 0) {
+      return 1;
+    }
+  }
+  return 0;
 }
 
 int print_if (list_t *list, int depth) {
@@ -325,6 +357,69 @@ int print_if (list_t *list, int depth) {
   return 0;
 }
 
+int print_while (list_t *list, int depth) {
+  if (list->len != 3 && list->len != 4) {
+    fprintf(stderr, "invalid while - needs 2 statements, has %d\n", list->len - 1);
+    return 1;
+  }
+  printf("%*swhile (", depth, "");
+  node_t *node = list->fst->next; // skip while
+  if (node->type != NODE_LIST) {
+    fprintf(stderr, "while conditional must be a list\n");
+    return 1;
+  }
+  print_fn_call(node->list, 0);
+  printf(") {\n");
+  node = node->next;
+  if (node->type != NODE_LIST) {
+    fprintf(stderr, "while body must be a list\n");
+    return 1;
+  }
+  print_fn_call(node->list, depth + INDENTATION);
+  printf(";\n%*s}", depth, "");
+  return 0;
+}
+
+int print_for (list_t *list, int depth) {
+  if (list->len != 5) {
+    fprintf(stderr, "invalid for - needs 4 statements, has %d\n", list->len - 1);
+    return 1;
+  }
+  printf("%*sfor (", depth, "");
+  node_t *node = list->fst->next; // skip for
+  if (node->type != NODE_LIST) {
+    fprintf(stderr, "for initialization must be a list\n");
+    return 1;
+  }
+  print_fn_call(node->list, 0);
+  printf("; ");
+
+  node = node->next;
+  if (node->type != NODE_LIST) {
+    fprintf(stderr, "for condition must be a list\n");
+    return 1;
+  }
+  print_fn_call(node->list, 0);
+  printf("; ");
+
+  node = node->next;
+  if (node->type != NODE_LIST) {
+    fprintf(stderr, "for afterthought must be a list\n");
+    return 1;
+  }
+  print_fn_call(node->list, 0);
+  printf(") {\n");
+
+  node = node->next;
+  if (node->type != NODE_LIST) {
+    fprintf(stderr, "if body must be a list\n");
+    return 1;
+  }
+  print_fn_call(node->list, depth + INDENTATION);
+  printf(";\n%*s}", depth, "");
+  return 0;
+}
+
 int print_fn_call (list_t *list, int depth) {
   node_t *node = list->fst;
   if (node->type != NODE_ATOM) {
@@ -332,11 +427,20 @@ int print_fn_call (list_t *list, int depth) {
     return 1;
   }
   if (is_infix(node->atom->name)) {
-    print_fn_call_infix(node);
+    print_fn_call_infix(node, depth);
     return 0;
+  }
+  if (strcmp(node->atom->name, "def") == 0) {
+    return print_def(list, depth);
   }
   if (strcmp(node->atom->name, "if") == 0) {
     return print_if(list, depth);
+  }
+  if (strcmp(node->atom->name, "while") == 0) {
+    return print_while(list, depth);
+  }
+  if (strcmp(node->atom->name, "for") == 0) {
+    return print_for(list, depth);
   }
   if (strcmp(node->atom->name, "progn") == 0) {
     node = node->next;
@@ -389,7 +493,7 @@ int print_c_fn_body (node_t *node) {
       if (node->type == NODE_ATOM && strcmp(node->atom->name, "void") == 0) {
         return 0;
       }
-      printf("  return ");
+      printf("%*sreturn", INDENTATION, "");
     }
     if (print_statement(node, INDENTATION) != 0) {
       return 1;
