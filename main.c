@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -223,9 +224,111 @@ void print_node (node_t *node, int depth) {
   }
 }
 
-void print_fn_call (list_t *list) {
+bool is_infix(char *input) {
+  if (strcmp(input, "lt") == 0 || strcmp(input, "lte") == 0 || strcmp(input, "eq") == 0 ||
+      strcmp(input, "gt") == 0 || strcmp(input, "gte") == 0 || strcmp(input, "ne") == 0) {
+    return true;
+  } else if (strcmp(input, "set") == 0) {
+    return true;
+  }
+  return false;
+}
+
+void transform_fn_name(char *input, char **output) {
+  *output = malloc(32);
+  //*output[0] = '\0';
+  if (strcmp(input, "lt") == 0) {
+    strncpy(*output, "<", 31);
+  } else if (strcmp(input, "lte") == 0) {
+    strncpy(*output, "<=", 31);
+  } else if (strcmp(input, "eq") == 0) {
+    strncpy(*output, "==", 31);
+  } else if (strcmp(input, "gt") == 0) {
+    strncpy(*output, ">", 31);
+  } else if (strcmp(input, "gte") == 0) {
+    strncpy(*output, ">=", 31);
+  } else if (strcmp(input, "ne") == 0) {
+    strncpy(*output, "!=", 31);
+  } else if (strcmp(input, "set") == 0) {
+    strncpy(*output, "=", 31);
+  } else {
+    strncpy(*output, input, 31);
+  }
+}
+
+int print_fn_call (list_t *list);
+void print_fn_call_infix (node_t *node) {
+  char *operator;
+  transform_fn_name(node->atom->name, &operator);
+  node = node->next;
+  if (node->type == NODE_ATOM) {
+    printf("%s", node->atom->name);
+  } else if (node->type == NODE_LIST) {
+    print_fn_call(node->list);
+  }
+  printf(" %s ", operator);
+  node = node->next;
+  if (node->type == NODE_ATOM) {
+    printf("%s", node->atom->name);
+  } else if (node->type == NODE_LIST) {
+    print_fn_call(node->list);
+  }
+  free(operator);
+}
+
+int print_if (list_t *list) {
+  if (list->len != 3 && list->len != 4) {
+    fprintf(stderr, "invalid if\n");
+    return 1;
+  }
+  printf("if (");
+  node_t *node = list->fst->next; // skip if
+  if (node->type != NODE_LIST) {
+    fprintf(stderr, "if conditional must be a list\n");
+    return 1;
+  }
+  print_fn_call(node->list);
+  printf(") {\n");
+  node = node->next;
+  if (node->type != NODE_LIST) {
+    fprintf(stderr, "if body must be a list\n");
+    return 1;
+  }
+  printf("    ");
+  print_fn_call(node->list);
+  printf(";\n");
+  if (list->len == 4) {
+    printf("  } else {\n");
+    node = node->next;
+    if (node->type != NODE_LIST) {
+      fprintf(stderr, "else body must be a list\n");
+      return 1;
+    }
+    printf("    ");
+    print_fn_call(node->list);
+    printf(";\n");
+  }
+  printf("  }");
+  return 0;
+}
+
+int print_fn_call (list_t *list) {
   node_t *node = list->fst;
-  printf("%s(", node->atom->name);
+  if (node->type != NODE_ATOM) {
+    fprintf(stderr, "function call must start with atom\n");
+    return 1;
+  }
+  if (is_infix(node->atom->name)) {
+    print_fn_call_infix(node);
+    return 0;
+  }
+  if (strcmp(node->atom->name, "if") == 0) {
+    return print_if(list);
+  }
+
+  char *name;
+  transform_fn_name(node->atom->name, &name);
+  printf("%s(", name);
   node = node->next;
   while (node != NULL) {
     if (node->type == NODE_ATOM) {
@@ -237,14 +340,17 @@ void print_fn_call (list_t *list) {
         printf("\"");
       }
     } else if (node->type == NODE_LIST) {
-      print_fn_call(node->list); // TODO: fix indentation
+      if (print_fn_call(node->list) != 0) { // TODO: fix indentation
+        return 1;
+      }
     }
     node = node->next;
     if (node != NULL) {
       printf(", ");
     }
   }
-  printf(");\n");
+  printf(")");
+  return 0;
 }
 
 int print_c_fn_body (node_t *node) {
@@ -264,7 +370,10 @@ int print_c_fn_body (node_t *node) {
     }
 
     if (node->type == NODE_LIST) {
-      print_fn_call(node->list);
+      if (print_fn_call(node->list) != 0) {
+        return 1;
+      }
+      printf(";\n");
     } else if (node->type == NODE_ATOM) {
       printf("%s;\n", node->atom->name);
     }
@@ -320,7 +429,6 @@ int print_c_fn (node_t *sig_node, node_t *defun_node) {
   }
   defun_node = defun_node->next;
   if (sig_node->list->len - 1 != defun_node->list->len) {
-    fprintf(stderr, "%d %d\n", sig_node->list->len, defun_node->list->len);
     fprintf(stderr, "type definition doesn't match function signature\n");
     return 1;
   }
@@ -391,7 +499,12 @@ int print_c (node_t *node) {
   return 0;
 }
 
-int parse (char *filename, list_t *root) {
+int parse (char *filename, node_t *root) {
+  root->type = NODE_LIST;
+  root->list = malloc(sizeof(list_t));
+  root->list->len = 0;
+  root->list->fst = NULL;
+
   FILE *f = fopen(filename, "r");
   if (f == NULL) {
     perror("Error reading file");
@@ -409,11 +522,11 @@ int parse (char *filename, list_t *root) {
       break;
     }
     if (prev == NULL) {
-      root->fst = node;
+      root->list->fst = node;
     } else {
       prev->next = node;
     }
-    root->len++;
+    root->list->len++;
     prev = node;
   }
 
@@ -427,25 +540,20 @@ int main (int argc, char **argv) {
     return 1;
   }
 
-  if (strcmp(argv[1], "build") != 0) {
+  node_t root;
+  if (strcmp(argv[1], "build") == 0) {
+    parse(argv[2], &root);
+    node_t *node = root.list->fst;
+    while (node != NULL) {
+      print_c(node);
+      node = node->next;
+    }
+  } else if (strcmp(argv[1], "parse") == 0) {
+    parse(argv[2], &root);
+    print_node(&root, 0);
+  } else {
     fprintf(stderr, "operation not supported\n");
     return 1;
-  }
-
-  node_t root;
-  root.type = NODE_LIST;
-  root.list = malloc(sizeof(list_t));
-  root.list->len = 0;
-  root.list->fst = NULL;
-  parse(argv[2], root.list);
-
-  //print_node(&root, 0);
-  //return 0;
-
-  node_t *node = root.list->fst;
-  while (node != NULL) {
-    print_c(node);
-    node = node->next;
   }
   return 0;
 }

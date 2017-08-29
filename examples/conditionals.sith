@@ -1,0 +1,8 @@
+(include "stdio.h")
+
+(: main (-> int int char**))
+(defun (main argc argv)
+  (if (gte argc 2)
+    (printf "%s\n" argv[1])
+    (puts "no args"))
+  0)
