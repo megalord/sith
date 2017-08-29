@@ -1,0 +1,10 @@
+(include "stdio.h")
+
+(: main (-> int))
+(defun (main)
+  (if (eq 1 1)
+    (progn
+      (puts "statement 1")
+      (puts "statement 2")
+      (puts "statement 3")))
+  0)

@@ -152,7 +152,7 @@ int read_atom (stream_t *stream, atom_t *atom) {
       str = buf_create(16);
       while (1) {
         int d = stream_peek(stream);
-        if (d == ' ' || d == ')') {
+        if (d == ' ' || d == '\n' || d == ')') {
           break;
         }
         buf_write_char(&str, (char)stream_read(stream));
@@ -179,6 +179,7 @@ int read_list (stream_t *stream, list_t *list) {
       stream_read(stream);
     } else {
       node = malloc(sizeof(node_t));
+      node->next = NULL;
       read_node(stream, node);
       if (list->len == 0) {
         list->fst = node;
@@ -206,6 +207,7 @@ int read_node (stream_t *stream, node_t *node) {
     case '(':
       node->type = NODE_LIST;
       node->list = malloc(sizeof(list_t));
+      node->list->len = 0;
       return read_list(stream, node->list);
     default:
       node->type = NODE_ATOM;
@@ -219,7 +221,7 @@ void print_node (node_t *node, int depth) {
     printf("%*s atom: %s\n", depth, "", node->atom->name);
   } else if (node->type == NODE_LIST) {
     printf("%*s list: %d\n", depth, "", node->list->len);
-    print_node(node->list->fst, depth + 1);
+    print_node(node->list->fst, depth + INDENTATION);
   }
   if (node->next != NULL) {
     print_node(node->next, depth);
@@ -259,6 +261,17 @@ void transform_fn_name(char *input, char **output) {
 }
 
 int print_fn_call (list_t *list, int depth);
+int print_statement (node_t *node, int depth) {
+  if (node->type == NODE_LIST) {
+    if (print_fn_call(node->list, depth) != 0) {
+      return 1;
+    }
+  } else if (node->type == NODE_ATOM) {
+    printf("%*s%s", depth, "", node->atom->name);
+  }
+  return 0;
+}
+
 void print_fn_call_infix (node_t *node) {
   char *operator;
   transform_fn_name(node->atom->name, &operator);
@@ -280,7 +293,7 @@ void print_fn_call_infix (node_t *node) {
 
 int print_if (list_t *list, int depth) {
   if (list->len != 3 && list->len != 4) {
-    fprintf(stderr, "invalid if\n");
+    fprintf(stderr, "invalid if - needs 1 or 2 statements, has %d\n", list->len - 2);
     return 1;
   }
   printf("%*sif (", depth, "");
@@ -325,6 +338,19 @@ int print_fn_call (list_t *list, int depth) {
   if (strcmp(node->atom->name, "if") == 0) {
     return print_if(list, depth);
   }
+  if (strcmp(node->atom->name, "progn") == 0) {
+    node = node->next;
+    while (node != NULL) {
+      if (print_statement(node, depth) != 0) {
+        return 1;
+      }
+      node = node->next;
+      if (node != NULL) {
+        printf(";\n");
+      }
+    }
+    return 0;
+  }
 
   char *name;
   transform_fn_name(node->atom->name, &name);
@@ -365,15 +391,10 @@ int print_c_fn_body (node_t *node) {
       }
       printf("  return ");
     }
-
-    if (node->type == NODE_LIST) {
-      if (print_fn_call(node->list, INDENTATION) != 0) {
-        return 1;
-      }
-      printf(";\n");
-    } else if (node->type == NODE_ATOM) {
-      printf("%s;\n", node->atom->name);
+    if (print_statement(node, INDENTATION) != 0) {
+      return 1;
     }
+    printf(";\n");
     node = node->next;
   }
   return 0;
@@ -514,6 +535,7 @@ int parse (char *filename, node_t *root) {
   node_t *node, *prev = NULL;
   while (1) {
     node = malloc(sizeof(node_t));
+    node->next = NULL;
     if (read_node(&stream, node) != 0) {
       free(node);
       break;

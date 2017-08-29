@@ -9,4 +9,9 @@ hello-world: sith
 conditionals: sith
 	sith build examples/conditionals.sith > examples/conditionals.c
 	gcc examples/conditionals.c -o examples/conditionals
-	./examples/conditionals hello
+	./examples/conditionals hello world
+
+progn: sith
+	sith build examples/progn.sith > examples/progn.c
+	gcc examples/progn.c -o examples/progn
+	./examples/progn
