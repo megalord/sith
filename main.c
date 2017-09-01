@@ -4,8 +4,6 @@
 #include <string.h>
 #include "main.h"
 
-int INDENTATION = 2;
-
 buffer_t buf_create (int size) {
   buffer_t buf = { .rem = size - 1, .size = size };
   buf.data = malloc(buf.size * sizeof(char));
@@ -98,11 +96,18 @@ int read_atom (stream_t *stream, atom_t *atom) {
   buffer_t str;
   int c = stream_peek(stream);
   switch (c) {
+    case '\'':
+      atom->type = ATOM_CHAR;
+      str = buf_create(16);
+      stream_read(stream);
+      read_until(stream, &str, c);
+      stream_read(stream);
+      break;
     case '"':
       atom->type = ATOM_STRING;
       str = buf_create(16);
       stream_read(stream);
-      read_until(stream, &str, '"');
+      read_until(stream, &str, c);
       stream_read(stream);
       break;
     default:
@@ -226,13 +231,28 @@ void transform_fn_name(char *input, char **output) {
   }
 }
 
+void print_atom (atom_t *atom) {
+  if (atom->type == ATOM_CHAR) {
+    printf("'");
+  } else if (atom->type == ATOM_STRING) {
+    printf("\"");
+  }
+  printf("%s", atom->name);
+  if (atom->type == ATOM_CHAR) {
+    printf("'");
+  } else if (atom->type == ATOM_STRING) {
+    printf("\"");
+  }
+}
+
 int print_statement (node_t *node, int depth) {
   if (node->type == NODE_LIST) {
     if (print_fn_call(node->list, depth) != 0) {
       return 1;
     }
   } else if (node->type == NODE_ATOM) {
-    printf("%*s%s", depth, "", node->atom->name);
+    printf("%*s", depth, "");
+    print_atom(node->atom);
   }
   return 0;
 }
@@ -249,7 +269,7 @@ void print_fn_call_infix (node_t *node, int depth) {
   printf(" %s ", operator);
   node = node->next;
   if (node->type == NODE_ATOM) {
-    printf("%s", node->atom->name);
+    print_atom(node->atom);
   } else if (node->type == NODE_LIST) {
     print_fn_call(node->list, 0);
   }
@@ -437,6 +457,15 @@ int print_fn_call (list_t *list, int depth) {
   if (strcmp(node->atom->name, "if") == 0) {
     return print_if(list, depth);
   }
+  if (strcmp(node->atom->name, "return") == 0) {
+    printf("%*sreturn", depth, "");
+    if (node->next == NULL) {
+      return 0;
+    } else {
+      printf(" ");
+      return print_statement(node->next, 0);
+    }
+  }
   if (strcmp(node->atom->name, "while") == 0) {
     return print_while(list, depth);
   }
@@ -445,6 +474,10 @@ int print_fn_call (list_t *list, int depth) {
   }
   if (strcmp(node->atom->name, "case") == 0) {
     return print_case(list, depth);
+  }
+  if (strcmp(node->atom->name, "break") == 0) {
+    printf("%*sbreak;", depth, "");
+    return 0;
   }
   if (strcmp(node->atom->name, "progn") == 0) {
     node = node->next;
@@ -459,6 +492,11 @@ int print_fn_call (list_t *list, int depth) {
     }
     return 0;
   }
+  if (strcmp(node->atom->name, "char") == 0) {
+    printf("(char)");
+    print_statement(node->next, 0);
+    return 0;
+  }
 
   char *name;
   transform_fn_name(node->atom->name, &name);
@@ -466,13 +504,7 @@ int print_fn_call (list_t *list, int depth) {
   node = node->next;
   while (node != NULL) {
     if (node->type == NODE_ATOM) {
-      if (node->atom->type == ATOM_STRING) {
-        printf("\"");
-      }
-      printf("%s", node->atom->name);
-      if (node->atom->type == ATOM_STRING) {
-        printf("\"");
-      }
+      print_atom(node->atom);
     } else if (node->type == NODE_LIST) {
       if (print_fn_call(node->list, depth + INDENTATION) != 0) { // TODO: fix indentation
         return 1;
@@ -595,11 +627,14 @@ int print_c_include (node_t *node) {
     fprintf(stderr, "expected atom\n");
     return 1;
   }
-  if (node->atom->type != ATOM_STRING) {
-    fprintf(stderr, "expected string\n");
+  if (node->atom->type == ATOM_STRING) {
+    printf("#include \"%s\"\n", node->atom->name);
+  } else if (node->atom->type == ATOM_IDENTIFIER) {
+    printf("#include %s\n", node->atom->name);
+  } else {
+    fprintf(stderr, "expected identifier or string\n");
     return 1;
   }
-  printf("#include <%s>\n", node->atom->name);
   return 0;
 }
 

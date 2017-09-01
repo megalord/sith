@@ -9,6 +9,7 @@ typedef struct {
 } stream_t;
 
 typedef enum {
+  ATOM_CHAR,
   ATOM_IDENTIFIER,
   ATOM_STRING
 } atom_type_t;
@@ -35,6 +36,8 @@ typedef struct node_t {
   list_t *list;
   struct node_t *next;
 } node_t;
+
+int INDENTATION = 2;
 
 // recursively used functions
 int read_node (stream_t *stream, node_t *node);
