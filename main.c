@@ -65,8 +65,10 @@ void read_until (stream_t *stream, buffer_t *buf, int d) {
     if (c == EOF || c == d) {
       break;
     }
-    stream_read(stream);
-    buf_write_char(buf, (char)c);
+    if (c == '\\') {
+      buf_write_char(buf, (char)stream_read(stream));
+    }
+    buf_write_char(buf, (char)stream_read(stream));
   }
 }
 
