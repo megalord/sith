@@ -276,6 +276,17 @@
         (print_atom node->atom))))
   0)
 
+(: print_statements (-> int node_t* int char*))
+(defun (print_statements node depth separator)
+  (while (ne node NULL)
+    (progn
+      (if (ne (print_statement node depth) 0)
+        (return 1))
+      (set node node->next)
+      (if (ne node NULL)
+        (printf "%s" separator))))
+  0)
+
 (: print_fn_call_infix (-> void node_t* int))
 (defun (print_fn_call_infix node depth)
   (def char* operator)
@@ -358,32 +369,23 @@
 
 (: print_while (-> int list_t* int))
 (defun (print_while list depth)
-  (if (and (ne list->len 3) (ne list->len 4))
+  (if (lt list->len 3)
     (progn
-      (fprintf stderr "invalid while - needs 2 statements, has %d\n" (- list->len 1))
+      (fprintf stderr "invalid while - needs at least 2 statements, has %d\n" (- list->len 1))
       (return 1)))
   (printf "%*swhile (" depth "")
   (def node_t* node list->fst->next) ; skip while
-  (if (ne node->type NODE_LIST)
-    (progn
-      (fprintf stderr "while conditional must be a list\n")
-      (return 1)))
-  (print_fn_call node->list 0)
+  (print_statement node 0)
   (printf ") {\n")
-  (set node node->next)
-  (if (ne node->type NODE_LIST)
-    (progn
-      (fprintf stderr "while body must be a list\n")
-      (return 1)))
-  (print_fn_call node->list (+ depth INDENTATION))
+  (print_statements node->next (+ depth INDENTATION) ";\n")
   (printf ";\n%*s}" depth "")
   0)
 
 (: print_for (-> int list_t* int))
 (defun (print_for list depth)
-  (if (ne list->len 5)
+  (if (lt list->len 5)
     (progn
-      (fprintf stderr "invalid for - needs 4 statements, has %d\n" (- list->len 1))
+      (fprintf stderr "invalid for - needs at least 4 statements, has %d\n" (- list->len 1))
       (return 1)))
   (printf "%*sfor (" depth "")
   (def node_t* node list->fst->next) ; skip for
@@ -410,12 +412,7 @@
   (print_fn_call node->list 0)
   (printf ") {\n")
 
-  (set node node->next)
-  (if (ne node->type NODE_LIST)
-    (progn
-      (fprintf stderr "if body must be a list\n")
-      (return 1)))
-  (print_fn_call node->list (+ depth INDENTATION))
+  (print_statements node->next (+ depth INDENTATION) ";\n")
   (printf ";\n%*s}" depth "")
   0)
 
@@ -446,12 +443,7 @@
           (print_statement clause 0)
           (printf ":\n")))
 
-      (set clause clause->next)
-      (if (ne clause->type NODE_LIST)
-        (progn
-          (fprintf stderr "case situation body must be a list\n")
-          (return 1)))
-      (print_fn_call clause->list (+ depth (* 2 INDENTATION)))
+      (print_statements clause->next (+ depth (* 2 INDENTATION)) ";\n")
       (printf ";\n%*sbreak;\n" (+ depth (* 2 INDENTATION)) "")
       (set node node->next)))
   (printf "%*s}" depth "")
@@ -491,16 +483,7 @@
       (printf "%*sbreak;" depth "")
       (return 0)))
   (if (eq (strcmp node->atom->name "progn") 0)
-    (progn
-      (set node node->next)
-      (while (ne node NULL)
-        (progn
-          (if (ne (print_statement node depth) 0)
-            (return 1))
-          (set node node->next)
-          (if (ne node NULL)
-            (printf ";\n"))))
-      (return 0)))
+    (return (print_statements node->next depth ";\n")))
   (if (eq (strcmp node->atom->name "char") 0)
     (progn
       (printf "(char)")
@@ -510,17 +493,7 @@
   (def char* name)
   (transform_fn_name node->atom->name &name)
   (printf "%*s%s(" depth "" name)
-  (set node node->next)
-  (while (ne node NULL)
-    (progn
-      (if (eq node->type NODE_ATOM)
-        (print_atom node->atom)
-        (if (eq node->type NODE_LIST)
-          (if (ne (print_fn_call node->list 0) 0)
-            (return 1))))
-      (set node node->next)
-      (if (ne node NULL)
-        (printf ", "))))
+  (print_statements node->next 0 ", ")
   (printf ")")
   0)
 
