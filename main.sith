@@ -3,6 +3,7 @@
 (include <stdio.h>)
 (include <string.h>)
 (include "main.h")
+(include "version.h")
 
 (: buf_create (-> buffer_t int))
 (defun (buf_create size)
@@ -697,6 +698,11 @@
 
 (: main (-> int int char**))
 (defun (main argc argv)
+  (if (eq (strcmp argv[1] "version") 0)
+    (progn
+      (puts VERSION)
+      (return 0)))
+
   (if (ne argc 3)
     (progn
       (fprintf stderr "wrong number of args\n")

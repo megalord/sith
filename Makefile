@@ -1,5 +1,8 @@
+GIT_COMMIT = $(shell git rev-parse HEAD)
+
 sith: main.sith
 	sith build main.sith > sith.c
+	echo "#define VERSION \"$(shell git name-rev --tags --name-only $(GIT_COMMIT)) - $(GIT_COMMIT)\"" > version.h
 	gcc sith.c -o sith
 
 upgrade: sith
