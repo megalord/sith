@@ -66,27 +66,25 @@
 
 (: read_until (-> void stream_t* buffer_t* int))
 (defun (read_until stream buf d)
-  (while (eq 1 1)
-    (progn
-      (def int c (stream_peek stream))
-      (if (or (eq c EOF) (eq c d))
-        (break))
-      (if (eq c '\\')
-        (buf_write_char buf (char (stream_read stream))))
-      (buf_write_char buf (char (stream_read stream)))))
+  (while 1
+    (def int c (stream_peek stream))
+    (if (or (eq c EOF) (eq c d))
+      (break))
+    (if (eq c '\\')
+      (buf_write_char buf (char (stream_read stream))))
+    (buf_write_char buf (char (stream_read stream))))
   void)
 
 (: read_empty (-> int stream_t*))
 (defun (read_empty stream)
   (def int c)
-  (while (eq 1 1)
-    (progn
-      (set c (stream_peek stream))
-      (if (eq c EOF)
-        (return EOF))
-      (if (or (eq c ' ') (eq c '\n'))
-        (stream_read stream)
-        (return c))))
+  (while 1
+    (set c (stream_peek stream))
+    (if (eq c EOF)
+      (return EOF))
+    (if (or (eq c ' ') (eq c '\n'))
+      (stream_read stream)
+      (return c)))
   void)
 
 (: read_comment (-> void stream_t*))
@@ -102,27 +100,26 @@
   (def buffer_t str)
   (def int c (stream_peek stream))
   (case c
-    ('\'' (progn
-           (set atom->type ATOM_CHAR)
-           (set str (buf_create 16))
-           (stream_read stream)
-           (read_until stream &str c)
-           (stream_read stream)))
-    ('"' (progn
-           (set atom->type ATOM_STRING)
-           (set str (buf_create 16))
-           (stream_read stream)
-           (read_until stream &str c)
-           (stream_read stream)))
-    (else (progn
-            (set atom->type ATOM_IDENTIFIER)
-            (set str (buf_create 16))
-            (while (eq 1 1)
-              (progn
-                (def int d (stream_peek stream))
-                (if (or (or (eq d ' ') (eq d '\n')) (eq d ')'))
-                  (break)) ; fixme
-                (buf_write_char &str (char (stream_read stream))))))))
+    ('\''
+      (set atom->type ATOM_CHAR)
+      (set str (buf_create 16))
+      (stream_read stream)
+      (read_until stream &str c)
+      (stream_read stream))
+    ('"'
+      (set atom->type ATOM_STRING)
+      (set str (buf_create 16))
+      (stream_read stream)
+      (read_until stream &str c)
+      (stream_read stream))
+    (else
+      (set atom->type ATOM_IDENTIFIER)
+      (set str (buf_create 16))
+      (while 1
+        (def int d (stream_peek stream))
+        (if (or (or (eq d ' ') (eq d '\n')) (eq d ')'))
+          (break)) ; fixme
+        (buf_write_char &str (char (stream_read stream))))))
   (set atom->name str.data)
   0)
 
@@ -135,25 +132,24 @@
       (return 1)))
   (def node_t* node)
   (def node_t* prev)
-  (while (eq 1 1)
-    (progn
-      (set c (stream_peek stream))
-      ; TODO: replace with case
-      (if (or (or (eq c EOF) (eq c -2)) (eq c ')'))
+  (while 1
+    (set c (stream_peek stream))
+    ; TODO: replace with case
+    (if (or (or (eq c EOF) (eq c -2)) (eq c ')'))
+      (progn
+        (stream_read stream)
+        (break))
+      (if (eq c ' ')
+        (stream_read stream)
         (progn
-          (stream_read stream)
-          (break))
-        (if (eq c ' ')
-          (stream_read stream)
-          (progn
-            (set node (malloc (sizeof node_t)))
-            (set node->next NULL)
-            (read_node stream node)
-            (if (eq list->len 0)
-              (set list->fst node)
-              (set prev->next node))
-            (set prev node)
-            (set list->len (+ list->len 1)))))))
+          (set node (malloc (sizeof node_t)))
+          (set node->next NULL)
+          (read_node stream node)
+          (if (eq list->len 0)
+            (set list->fst node)
+            (set prev->next node))
+          (set prev node)
+          (set list->len (+ list->len 1))))))
   0)
 
 (: read_node (-> int stream_t* node_t*))
@@ -165,18 +161,18 @@
       (fprintf stderr "unexpected eof\n")
       (return 1)))
   (case c
-    (';' (progn
-           (read_comment stream)
-           (return (read_node stream node))))
-    ('(' (progn
-           (set node->type NODE_LIST)
-           (set node->list (malloc (sizeof list_t)))
-           (set node->list->len 0)
-           (return (read_list stream node->list))))
-    (else (progn
-            (set node->type NODE_ATOM)
-            (set node->atom (malloc (sizeof atom_t)))
-            (return (read_atom stream node->atom)))))
+    (';'
+      (read_comment stream)
+      (return (read_node stream node)))
+    ('('
+      (set node->type NODE_LIST)
+      (set node->list (malloc (sizeof list_t)))
+      (set node->list->len 0)
+      (return (read_list stream node->list)))
+    (else
+      (set node->type NODE_ATOM)
+      (set node->atom (malloc (sizeof atom_t)))
+      (return (read_atom stream node->atom))))
   0)
 
 (: print_node (-> void node_t* int))
@@ -279,12 +275,11 @@
 (: print_statements (-> int node_t* int char*))
 (defun (print_statements node depth separator)
   (while (ne node NULL)
-    (progn
-      (if (ne (print_statement node depth) 0)
-        (return 1))
-      (set node node->next)
-      (if (ne node NULL)
-        (printf "%s" separator))))
+    (if (ne (print_statement node depth) 0)
+      (return 1))
+    (set node node->next)
+    (if (ne node NULL)
+      (printf "%s" separator)))
   0)
 
 (: print_fn_call_infix (-> void node_t* int))
@@ -430,22 +425,21 @@
   (set node node->next)
   (def node_t* clause)
   (while (ne node NULL)
-    (progn
-      (if (ne node->type NODE_LIST)
-        (progn
-          (fprintf stderr "case clause must be a list\n")
-          (return 1)))
-      (set clause node->list->fst)
-      (if (and (eq clause->type NODE_ATOM) (eq (strcmp clause->atom->name "else") 0))
-        (printf "%*sdefault:\n" (+ depth INDENTATION) "")
-        (progn
-          (printf "%*scase " (+ depth INDENTATION) "")
-          (print_statement clause 0)
-          (printf ":\n")))
+    (if (ne node->type NODE_LIST)
+      (progn
+        (fprintf stderr "case clause must be a list\n")
+        (return 1)))
+    (set clause node->list->fst)
+    (if (and (eq clause->type NODE_ATOM) (eq (strcmp clause->atom->name "else") 0))
+      (printf "%*sdefault:\n" (+ depth INDENTATION) "")
+      (progn
+        (printf "%*scase " (+ depth INDENTATION) "")
+        (print_statement clause 0)
+        (printf ":\n")))
 
-      (print_statements clause->next (+ depth (* 2 INDENTATION)) ";\n")
-      (printf ";\n%*sbreak;\n" (+ depth (* 2 INDENTATION)) "")
-      (set node node->next)))
+    (print_statements clause->next (+ depth (* 2 INDENTATION)) ";\n")
+    (printf ";\n%*sbreak;\n" (+ depth (* 2 INDENTATION)) "")
+    (set node node->next))
   (printf "%*s}" depth "")
   0)
 
@@ -504,16 +498,15 @@
       (fprintf stderr "empty function body\n")
       (return 1)))
   (while (ne node NULL)
-    (progn
-      (if (eq node->next NULL)
-        (progn
-          (if (and (eq node->type NODE_ATOM) (eq (strcmp node->atom->name "void") 0))
-            (return 0)
-          (printf "%*sreturn" INDENTATION ""))))
-      (if (ne (print_statement node INDENTATION) 0)
-        (return 1))
-      (printf ";\n")
-      (set node node->next)))
+    (if (eq node->next NULL)
+      (progn
+        (if (and (eq node->type NODE_ATOM) (eq (strcmp node->atom->name "void") 0))
+          (return 0)
+        (printf "%*sreturn" INDENTATION ""))))
+    (if (ne (print_statement node INDENTATION) 0)
+      (return 1))
+    (printf ";\n")
+    (set node node->next))
   0)
 
 (: print_c_fn (-> int node_t* node_t*))
@@ -580,16 +573,15 @@
   (set arg_node arg_node->next) ; first argument
   (set node node->next)
   (for (def int i 0) (lt i num_args) (set i (+ i 1))
-    (progn
-      (if (ne i 0)
-        (printf ", "))
-      (if (or (ne arg_node->type NODE_ATOM) (ne node->type NODE_ATOM))
-        (progn
-          (fprintf stderr "lambdas not supported\n")
-          (return 1)))
-      (printf "%s %s" node->atom->name arg_node->atom->name)
-      (set arg_node arg_node->next)
-      (set node node->next)))
+    (if (ne i 0)
+      (printf ", "))
+    (if (or (ne arg_node->type NODE_ATOM) (ne node->type NODE_ATOM))
+      (progn
+        (fprintf stderr "lambdas not supported\n")
+        (return 1)))
+    (printf "%s %s" node->atom->name arg_node->atom->name)
+    (set arg_node arg_node->next)
+    (set node node->next))
   (printf ") {\n")
   (if (ne (print_c_fn_body defun_node->next) 0)
     (return 1))
@@ -652,19 +644,18 @@
   (read_empty &stream)
   (def node_t* node)
   (def node_t* prev NULL)
-  (while (eq 1 1)
-    (progn
-      (set node (malloc (sizeof node_t)))
-      (set node->next NULL)
-      (if (ne (read_node &stream node) 0)
-        (progn
-          (free node)
-          (break)))
-      (if (eq prev NULL)
-        (set root->list->fst node)
-        (set prev->next node))
-      (set root->list->len (+ root->list->len 1))
-      (set prev node)))
+  (while 1
+    (set node (malloc (sizeof node_t)))
+    (set node->next NULL)
+    (if (ne (read_node &stream node) 0)
+      (progn
+        (free node)
+        (break)))
+    (if (eq prev NULL)
+      (set root->list->fst node)
+      (set prev->next node))
+    (set root->list->len (+ root->list->len 1))
+    (set prev node))
 
   (fclose f)
   0)
@@ -687,9 +678,8 @@
       (parse argv[2] &root)
       (def node_t *node root.list->fst)
       (while (ne node NULL)
-        (progn
-          (print_c node)
-          (set node node->next))))
+        (print_c node)
+        (set node node->next)))
     (if (eq (strcmp argv[1] "parse") 0)
       (progn
         (parse argv[2] &root)
