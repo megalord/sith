@@ -1,5 +1,5 @@
 examples/*
 !examples/*.sith
-sith
-sith.c
+main
+main.c
 version.h

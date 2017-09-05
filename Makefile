@@ -1,34 +1,28 @@
 GIT_COMMIT = $(shell git rev-parse HEAD)
 
 sith: main.sith
-	sith build main.sith > sith.c
 	echo "#define VERSION \"$(shell git name-rev --tags --name-only $(GIT_COMMIT)) - $(GIT_COMMIT)\"" > version.h
-	gcc sith.c -o sith
+	sith build main.sith
 
 upgrade: sith
-	cp ./sith ~/.local/bin/sith
+	cp ./main ~/.local/bin/sith
 
 hello-world: sith
-	./sith build examples/hello-world.sith > examples/hello-world.c
-	gcc examples/hello-world.c -o examples/hello-world
+	./main build examples/hello-world.sith
 	./examples/hello-world
 
 case: sith
-	./sith build examples/case.sith > examples/case.c
-	gcc examples/case.c -o examples/case
+	./main build examples/case.sith
 	./examples/case
 
 conditionals: sith
-	./sith build examples/conditionals.sith > examples/conditionals.c
-	gcc examples/conditionals.c -o examples/conditionals
+	./main build examples/conditionals.sith
 	./examples/conditionals hello world
 
 loops: sith
-	./sith build examples/loops.sith > examples/loops.c
-	gcc examples/loops.c -o examples/loops
+	./main build examples/loops.sith
 	./examples/loops
 
 progn: sith
-	./sith build examples/progn.sith > examples/progn.c
-	gcc examples/progn.c -o examples/progn
+	./main build examples/progn.sith
 	./examples/progn
