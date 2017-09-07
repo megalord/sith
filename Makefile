@@ -19,6 +19,10 @@ conditionals: sith
 	./main build examples/conditionals.sith
 	./examples/conditionals hello world
 
+include: sith
+	./main build examples/include.sith
+	./examples/include hello world
+
 loops: sith
 	./main build examples/loops.sith
 	./examples/loops
