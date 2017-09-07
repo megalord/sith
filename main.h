@@ -42,4 +42,5 @@ int INDENTATION = 2;
 // recursively used functions
 int read_node (stream_t *stream, node_t *node);
 int print_fn_call (FILE* fp, list_t *list, int depth);
+int parse_filename (char*, char**);
 int compile_front (char*, char*);
