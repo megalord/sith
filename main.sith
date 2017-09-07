@@ -662,6 +662,11 @@
 
 (: main (-> int int char**))
 (defun (main argc argv)
+  (if (eq argc 1)
+    (progn
+      (puts "sith compiler\n\nUsage:\n  sith [command]\n\nAvailable Commands:\n  build\n  parse\n  version")
+      (return 0)))
+
   (if (eq (strcmp argv[1] "version") 0)
     (progn
       (puts VERSION)
