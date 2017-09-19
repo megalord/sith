@@ -16,48 +16,53 @@
     (return true))
   false)
 
-(: transform_fn_name (-> void char* char**))
-(defun (transform_fn_name input output)
-  (set *output (malloc 32))
-  (set *output[0] '\0') ; TODO (*output)[0] vs *output[0]
+(: transform_fn_name (-> char* char* int))
+(defun (transform_fn_name input arity)
+  (def char* output (malloc 32))
+  (set output[0] '\0')
   (if (eq (strcmp input "lt") 0)
     (progn
-      (strncpy *output "<" 31)
-      (return)))
+      (strncpy output "<" 31)
+      (return output)))
   (if (eq (strcmp input "lte") 0)
     (progn
-      (strncpy *output "<=" 31)
-      (return)))
+      (strncpy output "<=" 31)
+      (return output)))
   (if (eq (strcmp input "gt") 0)
     (progn
-      (strncpy *output ">" 31)
-      (return)))
+      (strncpy output ">" 31)
+      (return output)))
   (if (eq (strcmp input "gte") 0)
     (progn
-      (strncpy *output ">=" 31)
-      (return)))
+      (strncpy output ">=" 31)
+      (return output)))
   (if (eq (strcmp input "ne") 0)
     (progn
-      (strncpy *output "!=" 31)
-      (return)))
+      (strncpy output "!=" 31)
+      (return output)))
   (if (eq (strcmp input "eq") 0)
     (progn
-      (strncpy *output "==" 31)
-      (return)))
+      (strncpy output "==" 31)
+      (return output)))
   (if (eq (strcmp input "set") 0)
     (progn
-      (strncpy *output "=" 31)
-      (return)))
+      (strncpy output "=" 31)
+      (return output)))
   (if (eq (strcmp input "and") 0)
     (progn
-      (strncpy *output "&&" 31)
-      (return)))
+      (strncpy output "&&" 31)
+      (return output)))
   (if (eq (strcmp input "or") 0)
     (progn
-      (strncpy *output "||" 31)
-      (return)))
-  (strncpy *output input 31)
-  void)
+      (strncpy output "||" 31)
+      (return output)))
+  (if (eq (strcmp input "main") 0)
+    (progn
+      (strncpy output "main" 31)
+      (return output)))
+  ;(snprintf output 31 "%s_%d" input arity)
+  (snprintf output 31 "%s" input)
+  output)
 
 (: print_atom (-> void FILE* atom_t*))
 (defun (print_atom fp atom)
@@ -95,8 +100,7 @@
 
 (: print_fn_call_infix (-> void FILE* node_t* int))
 (defun (print_fn_call_infix fp node depth)
-  (def char* operator)
-  (transform_fn_name node->atom->name &operator)
+  (def char* operator (transform_fn_name node->atom->name 2))
   (set node node->next)
   (if (eq node->type NODE_ATOM)
     (fprintf fp "%*s%s" depth "" node->atom->name)
@@ -287,6 +291,10 @@
     (progn
       (fprintf fp "%*sbreak;" depth "")
       (return 0)))
+  (if (eq (strcmp node->atom->name "continue") 0)
+    (progn
+      (fprintf fp "%*scontinue;" depth "")
+      (return 0)))
   (if (eq (strcmp node->atom->name "progn") 0)
     (return (print_statements fp node->next depth ";\n")))
   (if (eq (strcmp node->atom->name "char") 0)
@@ -295,9 +303,7 @@
       (print_statement fp node->next 0)
       (return 0)))
 
-  (def char* name)
-  (transform_fn_name node->atom->name &name)
-  (fprintf fp "%*s%s(" depth "" name)
+  (fprintf fp "%*s%s(" depth "" node->atom->name)
   (print_statements fp node->next 0 ", ")
   (fprintf fp ")")
   0)
@@ -360,7 +366,7 @@
     (progn
       (fprintf stderr "lambdas not supported\n")
       (return 1)))
-  (fprintf fp "%s %s (" node->atom->name fn_name)
+  (fprintf fp "%s %s (" node->atom->name (transform_fn_name fn_name (- sig_node->list->len 2)))
   (set defun_node defun_node->list->fst)
   (if (or (ne defun_node->type NODE_ATOM) (ne (strcmp defun_node->atom->name "defun") 0))
     (progn
