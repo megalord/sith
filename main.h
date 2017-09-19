@@ -37,6 +37,50 @@ typedef struct node_t {
   struct node_t *next;
 } node_t;
 
+typedef enum {
+  //TYPE_BOOL,
+  TYPE_CHAR,
+  //TYPE_LIST,
+  TYPE_INT,
+  TYPE_WILD
+} type_t;
+
+struct symbol_t;
+typedef struct {
+  int arity;
+  struct symbol_t** args;
+  struct symbol_t* ret;
+} func_t;
+
+typedef enum {
+  SYMBOL_VAR,
+  SYMBOL_FUNC
+} symbol_type_t;
+
+typedef struct symbol_t {
+  char* name;
+  symbol_type_t type;
+  //int is_extern;
+  union {
+    type_t var;
+    func_t* fn;
+  } def;
+} symbol_t;
+
+typedef struct {
+  int len;
+  symbol_t** symbols;
+} symbol_table_t;
+
+struct module_t;
+typedef struct module_t {
+  char* name;
+  int num_imports;
+  struct module_t** imports;
+  symbol_table_t table;
+  list_t code;
+} module_t;
+
 int INDENTATION = 2;
 
 // recursively used functions
@@ -44,3 +88,6 @@ int read_node (stream_t *stream, node_t *node);
 int print_fn_call (FILE* fp, list_t *list, int depth);
 int parse_filename (char*, char**);
 int compile_front (char*, char*);
+
+//symbol_table_t global_table = { .len = 0 };
+//symbol_t* lookup_symbol(char*);
