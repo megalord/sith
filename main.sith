@@ -189,21 +189,12 @@
     (print_node node->next depth))
   void)
 
-(: print_type (-> void type_t))
-(defun (print_type type)
-  (case type
-    (TYPE_CHAR (printf "char*"))
-    (TYPE_INT (printf "int"))
-    (TYPE_WILD (printf "undefined"))
-    (else (printf "oops")))
-  void)
-
 (: print_symbol (-> void symbol_t* int))
 (defun (print_symbol symbol depth)
   (if (eq symbol->type SYMBOL_VAR)
     (progn
       (printf "%*s" depth "")
-      (print_type symbol->def.var))
+      (print_type stdout symbol))
     (if (eq symbol->type SYMBOL_FUNC)
       (progn
         (def func_t fn *symbol->def.fn)
@@ -249,8 +240,8 @@
   (set tmp[filename_len] '\0')
   0)
 
-(: parse (-> int char* node_t*))
-(defun (parse filename root)
+(: parse_sexpr (-> int char* node_t*))
+(defun (parse_sexpr filename root)
   (set root->type NODE_LIST)
   (set root->list (malloc (sizeof list_t)))
   (set root->list->len 0)
@@ -309,15 +300,7 @@
     (progn
       (set symbol->type SYMBOL_VAR)
       ; TODO: define structured list of types with strings
-      (if (eq (strcmp node->atom->name "char*") 0)
-        (progn
-          (set symbol->def.var TYPE_CHAR)
-          (return 0)))
-      (if (eq (strcmp node->atom->name "int") 0)
-        (progn
-          (set symbol->def.var TYPE_CHAR)
-          (return 0)))
-      (set symbol->def.var TYPE_WILD)))
+      (set symbol->def.var node->atom->name)))
   0)
 
 (: parse_module (-> int node_t* module_t*))
@@ -374,26 +357,31 @@
     (set node node->next))
   0)
 
+(: parse (-> int char* module_t*))
+(defun (parse filename module)
+  (if (ne (parse_filename filename &module->name) 0)
+    (return 1))
+  (def node_t root)
+  (parse_sexpr filename &root)
+  (parse_module &root module))
+
 (: compile_front (-> int char* char*))
 (defun (compile_front input_file output_file)
-  (def node_t root)
-  (parse input_file &root)
+  (def module_t module)
+  (parse input_file &module)
   (def FILE* fp (fopen output_file "w"))
   (if (eq fp NULL)
     (progn
       (fprintf stderr "could not open output file\n")
       (return 1)))
-  (def node_t *node root.list->fst)
-  (while (ne node NULL)
-    (print_c fp node)
-    (set node node->next))
+  (print_c fp &module)
   (fclose fp)
   0)
 
 (: compile_back (-> int char* char*))
 (defun (compile_back input_file output_file)
   (def char command[128])
-  (snprintf command 128 "gcc -I. %s -o %s 2>&1" input_file output_file)
+  (snprintf command 128 "gcc -g -I. %s -o %s 2>&1" input_file output_file)
   (def FILE* gcc (popen command "r"))
   (if (eq gcc NULL)
     (progn
@@ -425,21 +413,19 @@
   (def char* filename argv[2])
   (if (eq (strcmp argv[1] "build") 0)
     (progn
-      (def char* basename)
-      (if (ne (parse_filename filename &basename) 0)
+      (def module_t module)
+      (if (ne (parse filename &module) 0)
         (return 1))
       (def char* cfilename (malloc (strlen filename)))
-      (snprintf cfilename (strlen filename) "%s.c" basename)
+      (snprintf cfilename (strlen filename) "%s.c" module.name)
       (if (ne (compile_front filename cfilename) 0)
         (return 1))
-      (return (compile_back cfilename basename)))
+      (return (compile_back cfilename module.name)))
     (if (eq (strcmp argv[1] "parse") 0)
       (progn
-        (def node_t root)
-        (parse filename &root)
         (def module_t module)
-        (set module.name "main")
-        (parse_module &root &module)
+        (if (ne (parse filename &module) 0)
+          (return 1))
         (print_module &module))
       (progn
         (fprintf stderr "operation not supported\n")

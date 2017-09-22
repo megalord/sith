@@ -37,6 +37,7 @@ typedef struct node_t {
   struct node_t *next;
 } node_t;
 
+// TODO: implement set datatype
 typedef enum {
   //TYPE_BOOL,
   TYPE_CHAR,
@@ -62,7 +63,7 @@ typedef struct symbol_t {
   symbol_type_t type;
   //int is_extern;
   union {
-    type_t var;
+    char* var;
     func_t* fn;
   } def;
 } symbol_t;

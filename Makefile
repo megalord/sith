@@ -30,3 +30,6 @@ loops: sith
 progn: sith
 	./main build examples/progn.sith
 	./examples/progn
+
+examples: hello-world case conditionals include loops progn
+	echo "done"
