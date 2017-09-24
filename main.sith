@@ -224,6 +224,10 @@
     (print_node node 2)
     (set node node->next))
   (printf "\n")
+
+  ; TODO: make this optional
+  (for (def int i 0) (lt i module->num_deps) (set i (+ i 1))
+    (print_module &module->deps[i]))
   void)
 
 (: parse_filename (-> int char* char**))
@@ -347,11 +351,11 @@
         ; TODO: add top-level (set)s to symbol table
         (if (eq (strcmp name "include") 0)
           (progn
-            (set module->deps[i_dep].name node->list->fst->next->atom->name)
-            ; TODO: build full module tree
-            ;(def node_t dep_root)
-            ;(parse dep->name &dep_root)
-            ;(parse_module &dep_root dep)
+            (def char* filename node->list->fst->next->atom->name)
+            (if (str_includes filename ".sith")
+              (if (ne (parse filename &module->deps[i_dep]) 0)
+                (return 1))
+              (set module->deps[i_dep].name filename))
             (set i_dep (+ i_dep 1))
             (free node)
             (set node node->next)
@@ -372,16 +376,14 @@
   (parse_sexpr filename &root)
   (parse_module &root module))
 
-(: compile_front (-> int char* char*))
-(defun (compile_front input_file output_file)
-  (def module_t module)
-  (parse input_file &module)
+(: compile_front (-> int module_t* char*))
+(defun (compile_front module output_file)
   (def FILE* fp (fopen output_file "w"))
   (if (eq fp NULL)
     (progn
       (fprintf stderr "could not open output file\n")
       (return 1)))
-  (print_c fp &module)
+  (print_c fp module)
   (fclose fp)
   0)
 
@@ -425,7 +427,7 @@
         (return 1))
       (def char* cfilename (malloc (strlen filename)))
       (snprintf cfilename (strlen filename) "%s.c" module.name)
-      (if (ne (compile_front filename cfilename) 0)
+      (if (ne (compile_front &module cfilename) 0)
         (return 1))
       (return (compile_back cfilename module.name)))
     (if (eq (strcmp argv[1] "parse") 0)

@@ -88,7 +88,8 @@ int INDENTATION = 2;
 int read_node (stream_t *stream, node_t *node);
 int print_fn_call (FILE* fp, list_t *list, int depth);
 int parse_filename (char*, char**);
-int compile_front (char*, char*);
+int parse (char*, module_t*);
+int compile_front (module_t*, char*);
 
 //symbol_table_t global_table = { .len = 0 };
 //symbol_t* lookup_symbol(char*);
