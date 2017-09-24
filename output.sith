@@ -329,8 +329,15 @@
 (: lookup_symbol (-> symbol_t* module_t* char*))
 (defun (lookup_symbol module name)
   (for (def int i 0) (lt i module->table.len) (set i (+ i 1))
-    (if (eq (strcmp name module->table.symbols[i]->name) 0)
-      (return module->table.symbols[i])))
+    (if (eq (strcmp name module->table.symbols[i].name) 0)
+      (return &module->table.symbols[i])))
+
+  ; Check deps
+  (def symbol_t* symbol)
+  (for (def int i 0) (lt i module->num_deps) (set i (+ i 1))
+    (set symbol (lookup_symbol &module->deps[i] name))
+    (if (ne symbol NULL)
+      (return symbol)))
   NULL)
 
 (: print_type (-> int FILE* symbol_t*))
@@ -378,7 +385,7 @@
   (for (def int i 0) (lt i symbol->def.fn->arity) (set i (+ i 1))
     (if (ne i 0)
       (fprintf fp ", "))
-    (set arg symbol->def.fn->args[i])
+    (set arg &symbol->def.fn->args[i])
     (if (ne arg->type SYMBOL_VAR)
       (progn
         (fprintf stderr "lambdas not supported\n")
@@ -432,7 +439,7 @@
 (defun (print_header fp module)
   (def symbol_t symbol)
   (for (def int i 0) (lt i module->table.len) (set i (+ i 1))
-    (set symbol *module->table.symbols[i])
+    (set symbol module->table.symbols[i])
     (if (eq symbol.type SYMBOL_FUNC)
       (progn
         (print_type fp symbol.def.fn->ret)
@@ -440,7 +447,7 @@
         (for (def int j 0) (lt j symbol.def.fn->arity) (set j (+ j 1))
           (if (ne j 0)
             (fprintf fp ", "))
-          (print_type fp symbol.def.fn->args[j]))
+          (print_type fp &symbol.def.fn->args[j]))
         (fprintf fp ");\n"))
       (progn
         (print_type fp symbol.def.fn->ret)
@@ -449,8 +456,8 @@
 
 (: print_c (-> int FILE* module_t*))
 (defun (print_c fp module)
-  (for (def int i 0) (lt i module->num_imports) (set i (+ i 1))
-    (print_c_include fp module->imports[i]->name))
+  (for (def int i 0) (lt i module->num_deps) (set i (+ i 1))
+    (print_c_include fp module->deps[i].name))
   (def node_t *node module->code.fst)
   (for (def int i 0) (lt i module->code.len) (set i (+ i 1))
     (print_c_fn fp module node)

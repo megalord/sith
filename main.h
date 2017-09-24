@@ -49,7 +49,7 @@ typedef enum {
 struct symbol_t;
 typedef struct {
   int arity;
-  struct symbol_t** args;
+  struct symbol_t* args;
   struct symbol_t* ret;
 } func_t;
 
@@ -70,14 +70,14 @@ typedef struct symbol_t {
 
 typedef struct {
   int len;
-  symbol_t** symbols;
+  symbol_t* symbols;
 } symbol_table_t;
 
 struct module_t;
 typedef struct module_t {
   char* name;
-  int num_imports;
-  struct module_t** imports;
+  int num_deps;
+  struct module_t* deps;
   symbol_table_t table;
   list_t code;
 } module_t;
