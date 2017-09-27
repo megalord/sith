@@ -31,5 +31,9 @@ progn: sith
 	./main build examples/progn.sith
 	./examples/progn
 
-examples: hello-world case conditionals include loops progn
+types: sith
+	./main build examples/types.sith
+	./examples/types
+
+examples: hello-world case conditionals include loops progn types
 	echo "done"

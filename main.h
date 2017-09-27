@@ -37,15 +37,6 @@ typedef struct node_t {
   struct node_t *next;
 } node_t;
 
-// TODO: implement set datatype
-typedef enum {
-  //TYPE_BOOL,
-  TYPE_CHAR,
-  //TYPE_LIST,
-  TYPE_INT,
-  TYPE_WILD
-} type_t;
-
 struct symbol_t;
 typedef struct {
   int arity;
@@ -69,8 +60,15 @@ typedef struct symbol_t {
 } symbol_t;
 
 typedef struct {
+  char* name;
+  node_t* def;
+} type_t;
+
+typedef struct {
   int len;
   symbol_t* symbols;
+  int num_types;
+  type_t* types;
 } symbol_table_t;
 
 struct module_t;
@@ -89,7 +87,6 @@ int read_node (stream_t *stream, node_t *node);
 int print_fn_call (FILE* fp, list_t *list, int depth);
 int parse_filename (char*, char**);
 int parse (char*, module_t*);
-int compile_front (module_t*, char*);
+int compile_front (module_t*, char*, bool);
 
-//symbol_table_t global_table = { .len = 0 };
-//symbol_t* lookup_symbol(char*);
+symbol_table_t global_table;
