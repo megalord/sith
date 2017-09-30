@@ -2,7 +2,7 @@
 (include <stdio.h>)
 (include <strings.h>)
 
-(deftype Count int)
+(deftype Count Int)
 (deftype Foo
   (struct (: bar String)
           (: baz Count)))

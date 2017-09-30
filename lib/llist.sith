@@ -1,0 +1,8 @@
+(deftype (LList a)
+  (struct (: data a)
+          (: next a*)
+          (: len Int)))
+
+(: car (-> (List a) (Maybe a)))
+(: cdr (-> (List a) (Maybe (List a))))
+(: cons (-> (List a) a (List a)))

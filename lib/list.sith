@@ -1,0 +1,14 @@
+(deftype (List a)
+  (struct (: len Int)
+          (: data a*)))
+
+(: nth (-> (List a) Int (Maybe a)))
+(defun (nth list n)
+  (if (gt n list.len)
+    None
+    (Just list.data[n])))
+
+(: each (-> (List a) (-> a void)))
+(defun (each list fn)
+  (for (def Int i 0) (lt i list.len) (set i (+ i 1))
+    (fn list.data[i])))

@@ -1,0 +1,37 @@
+(include "types.h")
+
+(: def_symbol (-> void symbol_t*))
+(defun (def_symbol symbol)
+  (set global_table.symbols[global_table.len] symbol)
+  (set global_table.len (+ global_table.len 1)))
+
+(: parse_type (-> type_t char*))
+(defun (parse_type str)
+  TYPE_CHAR)
+
+(: init_global_table (-> void))
+(defun (init_global_table)
+  ; (for ... (def_symbol sym))
+  (def_symbol (mk_var_symbol "" TYPE_BOOL))
+  )
+
+; (print_symbol sym) (printf "\n")
+(: print_symbol (-> void symbol_t*))
+(defun (print_symbol symbol)
+  (if (eq symbol->type SYMBOL_VAR)
+    (printf "%d" symbol->def.var)
+    (if (eq symbol->type SYMBOL_FUNC)
+      (progn
+        (printf "(->")
+        (for (def  int i 0) (lt i symbol->def.fn.arity) (set (+ i 1))
+          (printf " ")
+          (print_symbol symbol->def.fn.args[i])
+        (printf ")"))))))
+
+;(: lookup_symbol (-> symbol_t* char* int)) ;arity
+(: lookup_symbol (-> symbol_t* char*))
+(defun (lookup_symbol name)
+  (for (def int i 0) (lt i global_table.len) (set (+ i 1))
+    (if (eq (strcmp name global_table.symbols[i].name) 0)
+      (return global_table.symbols[i].name)))
+  NULL)

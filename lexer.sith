@@ -1,3 +1,12 @@
+;(deftype Buffer
+;  (struct Integer rem
+;          Integer size
+;          String data))
+;
+;(deftype Stream
+;  (struct File source
+;          Integer next))
+
 (: buf_create (-> buffer_t int))
 (defun (buf_create size)
   (def buffer_t buf)

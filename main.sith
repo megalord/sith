@@ -130,6 +130,12 @@
       (set symbol->def.var node->atom->name)))
   0)
 
+;(: deftype_table (-> void symbol_table_t* char* node_t*)
+;(defun (deftype_table table name type))
+;(: deftype (-> void char* node_t*)
+;(defun (deftype name def)
+;  (deftype_table current_table name type))
+
 (: parse_module (-> int node_t* module_t*))
 (defun (parse_module root module)
   (set module->num_deps 0)
@@ -191,6 +197,7 @@
             (continue)))
         (if (eq (strcmp name "deftype") 0)
           (progn
+            ;(deftype node->list->fst->next->atom->name node->list->fst->next->next)
             (set module->table.types[i_type].name node->list->fst->next->atom->name)
             (set module->table.types[i_type].def node->list->fst->next->next)
             (set i_type (+ i_type 1))
@@ -243,11 +250,9 @@
 (defun (make_type type src src_len dest dest_len)
   (set type->name (malloc src_len))
   (strncpy type->name src src_len)
-  (set type->def (malloc (sizeof node_t)))
-  (set type->def->type NODE_ATOM)
-  (set type->def->atom (malloc (sizeof atom_t)))
-  (set type->def->atom->name (malloc dest_len))
-  (strncpy type->def->atom->name dest dest_len)
+  (set type->is_struct false)
+  (set type->def.value (malloc dest_len))
+  (strncpy type->def.value dest dest_len)
   void)
 
 (: init_global_table (-> void))
@@ -256,7 +261,7 @@
   (set global_table.num_types 2)
   (set global_table.types (malloc (* global_table.num_types (sizeof type_t))))
   ;(make_type &global_table.types[0] "File" (sizeof "File") "FILE*" (sizeof "FILE*"))
-  (make_type &global_table.types[0] "Integer" (sizeof "Integer") "int" (sizeof "int"))
+  (make_type &global_table.types[0] "Int" (sizeof "Int") "int" (sizeof "int"))
   (make_type &global_table.types[1] "String" (sizeof "String") "char*" (sizeof "char*"))
   void)
 

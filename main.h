@@ -61,8 +61,17 @@ typedef struct symbol_t {
 
 typedef struct {
   char* name;
-  node_t* def;
+  bool is_struct;
+  union {
+    char* value;
+    list_t* fields;
+  } def;
 } type_t;
+
+typedef struct {
+  char* name;
+  union_type_t type;
+} union_t;
 
 typedef struct {
   int len;
