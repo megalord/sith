@@ -1,12 +1,14 @@
-(include "stdio.h")
-
-(: hello (-> void char*))
-(defun (hello name)
-  (printf "hello %s\n" name)
-  void)
-
 (: main (-> int))
 (defun (main)
-  (hello "world")
-  ; implicit returns
-  0)
+  (puts "hello world"))
+
+;(: hello (-> void char*))
+;(defun (hello name)
+;  (c.printf "hello %s\n" name)
+;  void)
+;
+;(: main (-> int))
+;(defun (main)
+;  (hello "world")
+;  ; implicit returns
+;  0)

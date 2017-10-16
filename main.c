@@ -5,12 +5,22 @@
 #include "main.h"
 #include "version.h"
 #include "lexer.c"
+#include "jit.c"
+symbol_t* table_get (symbol_table_t* table, char* name) {
+  for (int i = 0; i < table->len; i++) {
+    if (strcmp(table->symbols[i].name, name) == 0) {
+      return &table->symbols[i];
+    }
+  }
+  return NULL;
+}
+
 int print_type (FILE* fp, symbol_t* symbol) {
-  if (symbol->type != SYMBOL_VAR) {
+  if (symbol->is_fn) {
     fprintf(stderr, "cannot print function types\n");
     return 1;
   };
-  fprintf(fp, "%s", symbol->def.var);
+  fprintf(fp, "%s", symbol->data.type);
   return  0;
 }
 int str_includes (char* input, char* test) {
@@ -33,20 +43,17 @@ int str_includes (char* input, char* test) {
   return  1;
 }
 void print_symbol (symbol_t* symbol, int depth) {
-  if (symbol->type == SYMBOL_VAR) {
+  if (symbol->is_fn) {
+    printf("%*s", depth, "");
+    printf(" %s_%d ::", symbol->name, symbol->data.fn->arity);
+    for (int i = 0; i < symbol->data.fn->arity; i = i + 1) {
+      print_symbol(&symbol->data.fn->args[i], 1);
+      printf(" ->");
+    };
+    print_symbol(symbol->data.fn->ret, 1);
+  } else {
     printf("%*s", depth, "");
     print_type(stdout, symbol);
-  } else {
-    if (symbol->type == SYMBOL_FUNC) {
-      func_t fn = *symbol->def.fn;
-      printf("%*s", depth, "");
-      printf(" %s_%d ::", symbol->name, fn.arity);
-      for (int i = 0; i < fn.arity; i = i + 1) {
-        print_symbol(&fn.args[i], 1);
-        printf(" ->");
-      };
-      print_symbol(fn.ret, 1);
-    };
   };
 }
 void print_module (module_t* module) {
@@ -67,12 +74,6 @@ void print_module (module_t* module) {
     printf(" - ");
     print_symbol(&module->table.symbols[i], 0);
     printf("\n");
-  };
-  printf("code: %d\n", module->code.len);
-  node_t* node = module->code.fst;
-  for (int i = 0; i < module->code.len; i = i + 1) {
-    print_node(node, 2);
-    node = node->next;
   };
   printf("\n");
   for (int i = 0; i < module->num_deps; i = i + 1) {
@@ -128,26 +129,27 @@ int parse_sexpr (char* filename, node_t* root) {
 }
 int parse_type (node_t* node, symbol_t* symbol) {
   if (node->type == NODE_LIST) {
-    symbol->type = SYMBOL_FUNC;
-    symbol->def.fn = malloc(sizeof(func_t));
-    symbol->def.fn->arity = node->list->len - 2;
-    symbol->def.fn->args = malloc(symbol->def.fn->arity * sizeof(symbol_t));
+    symbol->is_fn = 1;
+    func_t* fn = malloc(sizeof(func_t));
+    fn->arity = node->list->len - 2;
+    fn->args = malloc(fn->arity * sizeof(symbol_t));
     node = node->list->fst;
     if (node->type != NODE_ATOM || strcmp(node->atom->name, "->") != 0) {
       fprintf(stderr, "only func and var types supported\n");
       return 1;
     };
     node = node->next;
-    symbol->def.fn->ret = malloc(sizeof(symbol_t));
-    parse_type(node, symbol->def.fn->ret);
+    fn->ret = malloc(sizeof(symbol_t));
+    parse_type(node, fn->ret);
     node = node->next;
-    for (int i = 0; i < symbol->def.fn->arity; i = i + 1) {
-      parse_type(node, &symbol->def.fn->args[i]);
+    for (int i = 0; i < fn->arity; i = i + 1) {
+      parse_type(node, &fn->args[i]);
       node = node->next;
     };
+    symbol->data.fn = fn;
   } else {
-    symbol->type = SYMBOL_VAR;
-    symbol->def.var = node->atom->name;
+    symbol->is_fn = 0;
+    symbol->data.type = node->atom->name;
   };
   return  0;
 }
@@ -155,7 +157,6 @@ int parse_module (node_t* root, module_t* module) {
   module->num_deps = 0;
   module->table.num_types = 0;
   module->table.len = 0;
-  module->code.len = 0;
   if (root->type != NODE_LIST) {
     fprintf(stderr, "root node must be a list\n");
     return 1;
@@ -215,21 +216,30 @@ int parse_module (node_t* root, module_t* module) {
         node = node->next;
         continue;;
       };
-      if (strcmp(name, "deftype") == 0) {
-        module->table.types[i_type].name = node->list->fst->next->atom->name;
-        module->table.types[i_type].def = node->list->fst->next->next;
-        i_type = i_type + 1;
+      if (strcmp(name, "defun") == 0) {
+        node_t* fn_node = node->list->fst->next;
+        node_t* sig_node = fn_node->list->fst;
+        fn_node = fn_node->next;
+        symbol_t* sym = table_get(&module->table, sig_node->atom->name);
+        if (sym == NULL) {
+          fprintf(stderr, "symbol %s not found\n", node->list->fst->atom->name);
+          return 1;
+        }
+        for (int i = 0; i < sym->data.fn->arity; i = i + 1) {
+          sig_node = sig_node->next;
+          sym->data.fn->args[i].name = sig_node->atom->name;
+        }
+        sym->data.fn->body = malloc(sizeof(list_t));
+        sym->data.fn->body->len = node->list->len - 2;
+        sym->data.fn->body->fst = fn_node;
         free(node);
         node = node->next;
         continue;;
       };
     };
-    if (prev == NULL) {
-      module->code.fst = node;
-    } else {
+    if (prev != NULL) {
       prev->next = node;
     };
-    module->code.len = module->code.len + 1;
     prev = node;
     node = node->next;
   };
@@ -273,15 +283,17 @@ int main (int argc, char** argv) {
     return 1;
   };
   char* filename = argv[2];
+  module_t module;
   if (strcmp(argv[1], "parse") == 0) {
-    module_t module;
     if (parse(filename, &module) != 0) {
       return 1;
     };
     print_module(&module);
   } else {
-    fprintf(stderr, "operation not supported\n");
-    return 1;
+    if (parse(filename, &module) != 0) {
+      return 1;
+    };
+    compile_root(&module);
   };
   return  0;
 }

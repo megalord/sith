@@ -42,21 +42,16 @@ typedef struct {
   int arity;
   struct symbol_t* args;
   struct symbol_t* ret;
+  list_t* body;
 } func_t;
-
-typedef enum {
-  SYMBOL_VAR,
-  SYMBOL_FUNC
-} symbol_type_t;
 
 typedef struct symbol_t {
   char* name;
-  symbol_type_t type;
-  //int is_extern;
+  int is_fn;
   union {
-    char* var;
+    char* type;
     func_t* fn;
-  } def;
+  } data;
 } symbol_t;
 
 typedef struct {
@@ -77,7 +72,6 @@ typedef struct module_t {
   int num_deps;
   struct module_t* deps;
   symbol_table_t table;
-  list_t code;
 } module_t;
 
 int INDENTATION = 2;
