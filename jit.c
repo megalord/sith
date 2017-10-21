@@ -3,6 +3,7 @@
 typedef struct {
   char* name;
   int is_fn;
+  jit_type_t type;
   union {
     jit_value_t val;
     jit_function_t fn;
@@ -24,6 +25,8 @@ typedef struct sj_module_t {
   sj_symbol_table_t table;
 } sj_module_t;
 
+jit_type_t type_cstring;
+
 sj_symbol_t* sj_table_get (sj_symbol_table_t* table, char* name) {
   for (int i = 0; i < table->len; i++) {
     if (strcmp(table->symbols[i].name, name) == 0) {
@@ -36,29 +39,51 @@ sj_symbol_t* sj_table_get (sj_symbol_table_t* table, char* name) {
 jit_type_t to_jit_type (char* type) {
   if (strcmp(type, "int") == 0) {
     return jit_type_int;
-  } else if (strcmp(type, "char") == 0) {
-    return jit_type_ubyte;
+  } else if (strcmp(type, "char*") == 0) {
+    return type_cstring;
   } else if (strcmp(type, "void") == 0) {
     return jit_type_void;
   }
   return jit_type_void;
 }
 
-void c_puts (jit_function_t* fn, char* str) {
-  jit_type_t type_cstring = jit_type_create_pointer(jit_type_sys_char, 1);
+jit_value_t c_puts (jit_function_t* fn, char* str) {
   jit_type_t puts_signature = jit_type_create_signature(jit_abi_cdecl, jit_type_int, &type_cstring, 1, 1);
   jit_value_t hostmemptr = jit_value_create_long_constant(*fn, type_cstring, (long)str);
-  jit_insn_call_native(*fn, "puts", puts, puts_signature, &hostmemptr, 1, JIT_CALL_NOTHROW);
+  return jit_insn_call_native(*fn, "puts", puts, puts_signature, &hostmemptr, 1, JIT_CALL_NOTHROW);
 }
 
-void eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t* node) {
+jit_value_t c_printf (jit_function_t* fn, sj_symbol_t* symbols, int arity) {
+  jit_type_t* arg_types = malloc(arity * sizeof(jit_type_t));
+  for (int i = 0; i < arity; i++) {
+    arg_types[i] = symbols[i].type;
+  }
+  jit_value_t* arg_values = malloc(arity * sizeof(jit_value_t));
+  for (int i = 0; i < arity; i++) {
+    arg_values[i] = symbols[i].data.val;
+  }
+  jit_type_t printf_signature = jit_type_create_signature(jit_abi_cdecl, jit_type_int, arg_types, arity, 1);
+  //jit_value_t hostmemptr = jit_value_create_long_constant(*fn, type_cstring, (long)str);
+  return jit_insn_call_native(*fn, "printf", printf, printf_signature, arg_values, arity, JIT_CALL_NOTHROW);
+}
+
+jit_value_t eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t* node) {
   if (node->type == NODE_LIST) {
     int arity = node->list->len - 1;
     node = node->list->fst;
     char* sub_fn_name = node->atom->name;
+    for (int i = 0; i < arity; i++) {
+      node = node->next;
+      //if (node->type == NODE_ATOM) {
+      //  symbols[i]
+      //}
+    }
 
     if (strcmp(sub_fn_name, "puts") == 0) {
-      c_puts(fn, node->next->atom->name);
+      return c_puts(fn, node->next->atom->name);
+    }
+    if (strcmp(sub_fn_name, "printf") == 0) {
+      return c_printf(fn, node->next->atom->name, arity);
     }
 
     //node = node->next;
@@ -70,6 +95,7 @@ void eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t* node) 
     //}
     //jit_value_t tmp = jit_insn_call(fn, sub_fn_name, sj_table_get(table, sub_fn_name), 0, args, arity, 0);
   }
+  return 0;
 }
 
 int compile_fn (jit_context_t* ctx, func_t* src, jit_function_t* fn) {
@@ -81,6 +107,7 @@ int compile_fn (jit_context_t* ctx, func_t* src, jit_function_t* fn) {
   for (int i = 0; i < src->arity; i++) {
     args[i] = to_jit_type(src->args[i].data.type);
     table.symbols[i].name = src->args[i].name;
+    table.symbols[i].type = args[i];
     table.symbols[i].data.val = jit_value_get_param(*fn, i);
     table.symbols[i].is_fn = 0;
   }
@@ -91,10 +118,12 @@ int compile_fn (jit_context_t* ctx, func_t* src, jit_function_t* fn) {
 
   // Evaluate statements in function body.
   node_t* node = src->body->fst;
+  jit_value_t result;
   for (int i = 0; i < src->body->len; i++) {
-    eval_statement(fn, &table, node);
+    result = eval_statement(fn, &table, node);
     node = node->next;
   }
+  jit_insn_return(*fn, result);
 
   return 0;
 }
@@ -115,6 +144,8 @@ int compile_root (module_t* src) {
   jit_init();
   jit_context_t ctx = jit_context_create();
 
+  type_cstring = jit_type_create_pointer(jit_type_sys_char, 1);
+
   sj_module_t mod;
   mod.len = src->num_deps;
   sj_module_t* deps = malloc(mod.len * sizeof(sj_module_t));
@@ -129,8 +160,10 @@ int compile_root (module_t* src) {
     jit_dump_function(stdout, main->data.fn, "F [uncompiled]");
     jit_function_compile(main->data.fn);
     jit_function_apply(main->data.fn, args, &result);
-    printf("exited with status %u\n", (int)result);
+    jit_context_destroy(ctx);
+    return (int)result;
+  } else {
+    jit_context_destroy(ctx);
+    return 0;
   }
-	jit_context_destroy(ctx);
-  return 0;
 }

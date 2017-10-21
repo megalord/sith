@@ -1,41 +1,4 @@
-typedef struct {
-  int rem, size;
-  char *data;
-} buffer_t;
-
-typedef struct {
-  FILE *source;
-  int next;
-} stream_t;
-
-typedef enum {
-  ATOM_CHAR,
-  ATOM_IDENTIFIER,
-  ATOM_STRING
-} atom_type_t;
-
-typedef struct {
-  char *name;
-  atom_type_t type;
-} atom_t;
-
-struct node_t;
-typedef struct {
-  int len;
-  struct node_t *fst;
-} list_t;
-
-typedef enum {
-  NODE_ATOM,
-  NODE_LIST
-} node_type_t;
-
-typedef struct node_t {
-  node_type_t type;
-  atom_t *atom;
-  list_t *list;
-  struct node_t *next;
-} node_t;
+#include "lexer.h"
 
 struct symbol_t;
 typedef struct {
@@ -55,15 +18,8 @@ typedef struct symbol_t {
 } symbol_t;
 
 typedef struct {
-  char* name;
-  node_t* def;
-} type_t;
-
-typedef struct {
   int len;
   symbol_t* symbols;
-  int num_types;
-  type_t* types;
 } symbol_table_t;
 
 struct module_t;
@@ -77,8 +33,6 @@ typedef struct module_t {
 int INDENTATION = 2;
 
 // recursively used functions
-int read_node (stream_t *stream, node_t *node);
-int print_fn_call (FILE* fp, list_t *list, int depth);
 int parse_filename (char*, char**);
 int parse (char*, module_t*);
 int compile_front (module_t*, char*, bool);
