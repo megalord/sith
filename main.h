@@ -12,7 +12,7 @@ typedef struct symbol_t {
   char* name;
   int is_fn;
   union {
-    char* type;
+    atom_type_t type;
     func_t* fn;
   } data;
 } symbol_t;

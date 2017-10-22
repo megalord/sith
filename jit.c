@@ -36,14 +36,26 @@ sj_symbol_t* sj_table_get (sj_symbol_table_t* table, char* name) {
   return NULL;
 }
 
-jit_type_t to_jit_type (char* type) {
-  if (strcmp(type, "int") == 0) {
-    return jit_type_int;
-  } else if (strcmp(type, "char*") == 0) {
-    return type_cstring;
-  } else if (strcmp(type, "void") == 0) {
-    return jit_type_void;
+jit_type_t to_jit_type (symbol_t* symbol) {
+  switch (symbol->data.type) {
+    case ATOM_CHAR:
+    case ATOM_INT:
+      return jit_type_int;
+    case ATOM_IDENTIFIER:
+      if (strcmp(symbol->name, "int") == 0) {
+        return jit_type_int;
+      } else if (strcmp(symbol->name, "char*") == 0) {
+        return type_cstring;
+      } else if (strcmp(symbol->name, "void") == 0) {
+        return jit_type_void;
+      } else {
+        fprintf(stderr, "unknown type symbol: %s\n", symbol->name);
+        return jit_type_void;
+      }
+    case ATOM_STRING:
+      return type_cstring;
   }
+  fprintf(stderr, "unknown type\n");
   return jit_type_void;
 }
 
@@ -72,12 +84,12 @@ jit_value_t eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t*
     int arity = node->list->len - 1;
     node = node->list->fst;
     char* sub_fn_name = node->atom->name;
-    for (int i = 0; i < arity; i++) {
-      node = node->next;
-      //if (node->type == NODE_ATOM) {
-      //  symbols[i]
-      //}
-    }
+    //for (int i = 0; i < arity; i++) {
+    //  node = node->next;
+    //  if (node->type == NODE_ATOM) {
+    //    symbols[i]
+    //  }
+    //}
 
     if (strcmp(sub_fn_name, "puts") == 0) {
       return c_puts(fn, node->next->atom->name);
@@ -105,13 +117,13 @@ int compile_fn (jit_context_t* ctx, func_t* src, jit_function_t* fn) {
 
   jit_type_t* args = malloc(src->arity * sizeof(jit_type_t));
   for (int i = 0; i < src->arity; i++) {
-    args[i] = to_jit_type(src->args[i].data.type);
+    args[i] = to_jit_type(&src->args[i]);
     table.symbols[i].name = src->args[i].name;
     table.symbols[i].type = args[i];
     table.symbols[i].data.val = jit_value_get_param(*fn, i);
     table.symbols[i].is_fn = 0;
   }
-  jit_type_t sig = jit_type_create_signature(jit_abi_cdecl, to_jit_type(src->ret->data.type), args, src->arity, 1);
+  jit_type_t sig = jit_type_create_signature(jit_abi_cdecl, to_jit_type(src->ret), args, src->arity, 1);
   *fn = jit_function_create(*ctx, sig);
   jit_type_free(sig);
   free(args);

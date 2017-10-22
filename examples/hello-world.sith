@@ -1,7 +1,11 @@
 (: main (-> int))
 (defun (main)
-  (printf "hello %s\n" "world"))
+  (puts "hello world"))
 
+;(: main (-> int))
+;(defun (main)
+;  (printf "hello %s\n" "world"))
+;
 ;(: hello (-> void char*))
 ;(defun (hello name)
 ;  (c.printf "hello %s\n" name)

@@ -21,8 +21,11 @@ int print_type (FILE* fp, symbol_t* symbol) {
     fprintf(stderr, "cannot print function types\n");
     return 1;
   }
-  fprintf(fp, "%s", symbol->data.type);
-  return  0;
+  fprintf(fp, "%s", atom_print_type(symbol->data.type));
+  if (symbol->data.type == ATOM_IDENTIFIER) {
+    fprintf(fp, " (%s)", symbol->name);
+  }
+  return 0;
 }
 
 int str_includes (char* input, char* test) {
@@ -113,16 +116,21 @@ int parse_type (node_t* node, symbol_t* symbol) {
     }
     node = node->next;
     fn->ret = malloc(sizeof(symbol_t));
-    parse_type(node, fn->ret);
+    if (parse_type(node, fn->ret) != 0) {
+      return 1;
+    }
     node = node->next;
     for (int i = 0; i < fn->arity; i = i + 1) {
-      parse_type(node, &fn->args[i]);
+      if (parse_type(node, &fn->args[i]) != 0) {
+        return 1;
+      }
       node = node->next;
     }
     symbol->data.fn = fn;
   } else {
     symbol->is_fn = 0;
-    symbol->data.type = node->atom->name;
+    symbol->name = node->atom->name;
+    symbol->data.type = node->atom->type;
   }
   return  0;
 }
@@ -164,11 +172,13 @@ int parse_module (node_t* root, module_t* module) {
       char* name = node->list->fst->atom->name;
       if (strcmp(name, ":") == 0) {
         module->table.symbols[i_sym].name = node->list->fst->next->atom->name;
-        parse_type(node->list->fst->next->next, &module->table.symbols[i_sym]);
+        if (parse_type(node->list->fst->next->next, &module->table.symbols[i_sym]) != 0) {
+          return 1;
+        }
         i_sym = i_sym + 1;
         free(node);
         node = node->next;
-        continue;;
+        continue;
       }
       if (strcmp(name, "include") == 0) {
         char* filename = node->list->fst->next->atom->name;
