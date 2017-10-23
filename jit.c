@@ -33,7 +33,24 @@ sj_symbol_t* sj_table_get (sj_symbol_table_t* table, char* name) {
       return &table->symbols[i];
     }
   }
+  if (table->parent != NULL) {
+    return sj_table_get(table->parent, name);
+  }
+  fprintf(stderr, "symbol %s not found\n", name);
   return NULL;
+}
+
+jit_type_t str_to_jit_type (char* type) {
+  if (strcmp(type, "int") == 0) {
+    return jit_type_int;
+  } else if (strcmp(type, "char*") == 0) {
+    return type_cstring;
+  } else if (strcmp(type, "void") == 0) {
+    return jit_type_void;
+  } else {
+    fprintf(stderr, "unknown type: %s\n", type);
+    return jit_type_void;
+  }
 }
 
 jit_type_t to_jit_type (symbol_t* symbol) {
@@ -42,16 +59,7 @@ jit_type_t to_jit_type (symbol_t* symbol) {
     case ATOM_INT:
       return jit_type_int;
     case ATOM_IDENTIFIER:
-      if (strcmp(symbol->name, "int") == 0) {
-        return jit_type_int;
-      } else if (strcmp(symbol->name, "char*") == 0) {
-        return type_cstring;
-      } else if (strcmp(symbol->name, "void") == 0) {
-        return jit_type_void;
-      } else {
-        fprintf(stderr, "unknown type symbol: %s\n", symbol->name);
-        return jit_type_void;
-      }
+      return str_to_jit_type(symbol->name);
     case ATOM_STRING:
       return type_cstring;
   }
@@ -110,62 +118,158 @@ jit_value_t eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t*
   return 0;
 }
 
-int compile_fn (jit_context_t* ctx, func_t* src, jit_function_t* fn) {
-  sj_symbol_table_t table;
-  table.len = src->arity;
-  table.symbols = malloc(table.len * sizeof(sj_symbol_t));
-
-  jit_type_t* args = malloc(src->arity * sizeof(jit_type_t));
-  for (int i = 0; i < src->arity; i++) {
-    args[i] = to_jit_type(&src->args[i]);
-    table.symbols[i].name = src->args[i].name;
-    table.symbols[i].type = args[i];
-    table.symbols[i].data.val = jit_value_get_param(*fn, i);
-    table.symbols[i].is_fn = 0;
+int parse_signature (list_t* list, jit_type_t* type) {
+  int arity = list->len - 2;
+  node_t* node = list->fst;
+  if (node->type != NODE_ATOM || strcmp(node->atom->name, "->") != 0) {
+    fprintf(stderr, "invalid signature");
+    return 1;
   }
-  jit_type_t sig = jit_type_create_signature(jit_abi_cdecl, to_jit_type(src->ret), args, src->arity, 1);
-  *fn = jit_function_create(*ctx, sig);
-  jit_type_free(sig);
-  free(args);
 
-  // Evaluate statements in function body.
-  node_t* node = src->body->fst;
-  jit_value_t result;
-  for (int i = 0; i < src->body->len; i++) {
-    result = eval_statement(fn, &table, node);
+  jit_type_t* args = malloc(arity * sizeof(jit_type_t));
+  for (int i = 0; i < arity; i++) {
+    node = node->next;
+    if (node->type != NODE_ATOM) {
+      fprintf(stderr, "only primitive arguments are allowed");
+      return 1;
+    }
+    args[i] = str_to_jit_type(node->atom->name);
+  }
+
+  node = node->next;
+  if (node->type != NODE_ATOM) {
+    fprintf(stderr, "only primitive return values are allowed\n");
+    return 1;
+  }
+  jit_type_t ret = str_to_jit_type(node->atom->name);
+  *type = jit_type_create_signature(jit_abi_cdecl, ret, args, arity, 1);
+  return 0;
+}
+
+int compile_fn (jit_context_t* ctx, sj_symbol_table_t* parent, list_t* sig, node_t* body, sj_symbol_t* sym) {
+  sj_symbol_table_t table;
+  table.len = sig->len - 1;
+  table.symbols = malloc(table.len * sizeof(sj_symbol_t));
+  table.parent = parent;
+
+  node_t* node = sig->fst->next; // skip fn name
+
+  for (int i = 0; i < table.len; i++) {
+    if (node->type != NODE_ATOM) {
+      fprintf(stderr, "invalid argument\n");
+      return 1;
+    }
+    table.symbols[i].name = node->atom->name;
+    table.symbols[i].type = jit_type_get_param(sym->type, i);
+    table.symbols[i].data.val = jit_value_get_param(sym->data.fn, i);
+    table.symbols[i].is_fn = 0;
     node = node->next;
   }
-  jit_insn_return(*fn, result);
+  sym->data.fn = jit_function_create(*ctx, sym->type);
+
+  // Evaluate statements in function body.
+  jit_value_t result;
+  while (body != NULL) {
+    result = eval_statement(&sym->data.fn, &table, body);
+    body = body->next;
+  }
+  jit_insn_return(sym->data.fn, result);
 
   return 0;
 }
 
-int compile_module (jit_context_t* ctx, module_t* src, sj_module_t* mod) {
-  mod->table.len = src->table.len;
-  mod->table.parent = NULL;
-  mod->table.symbols = malloc(mod->table.len * sizeof(sj_symbol_t));
-  for (int i = 0; i < mod->table.len; i++) {
-    mod->table.symbols[i].name = src->table.symbols[i].name;
-    // assumes is_fn == 1
-    compile_fn(ctx, src->table.symbols[i].data.fn, &mod->table.symbols[i].data.fn);
+int module_setup (sj_module_t* module, node_t* root) {
+  module->len = 0;
+  module->table.len = 0;
+  module->table.parent = NULL;
+  if (root->type != NODE_LIST) {
+    fprintf(stderr, "root node must be a list\n");
+    return 1;
+  }
+  node_t* node = root->list->fst;
+  for (int i = 0; i < root->list->len; i = i + 1) {
+    if (node->type == NODE_LIST && node->list->fst->type == NODE_ATOM) {
+      if (strcmp(node->list->fst->atom->name, "include") == 0) {
+        module->len = module->len + 1;
+      } else if (strcmp(node->list->fst->atom->name, ":") == 0) {
+        module->table.len = module->table.len + 1;
+      }
+    }
+    node = node->next;
+  }
+  module->deps = malloc(module->len * sizeof(sj_module_t));
+  module->table.symbols = malloc(module->table.len * sizeof(sj_symbol_t));
+  return 0;
+}
+
+int module_compile (jit_context_t* ctx, node_t* root, sj_module_t* module) {
+  if (module_setup(module, root) != 0) {
+    return 1;
+  }
+
+  node_t* node = root->list->fst;
+  int i_sym = 0;
+  for (int i = 0; i < root->list->len; i++) {
+    if (node->type != NODE_LIST) {
+      fprintf(stderr, "sub-root node must be a list\n");
+      continue;
+    }
+    if (node->list->fst->type == NODE_ATOM) {
+      char* name = node->list->fst->atom->name;
+      if (strcmp(name, ":") == 0) {
+        module->table.symbols[i_sym].name = node->list->fst->next->atom->name;
+        if (node->list->fst->next->next->type == NODE_LIST) {
+          module->table.symbols[i_sym].is_fn = 1;
+          parse_signature(node->list->fst->next->next->list, &module->table.symbols[i_sym].type);
+        }
+        i_sym++;
+      } else if (strcmp(name, "defun") == 0) {
+        node_t* sig_node = node->list->fst->next;
+        node_t* body_node = sig_node->next;
+        if (sig_node->type != NODE_LIST || sig_node->list->fst->type != NODE_ATOM) {
+          fprintf(stderr, "invalid arg list\n");
+          continue;
+        }
+        char* fn_name = sig_node->list->fst->atom->name;
+        sj_symbol_t* sym = sj_table_get(&module->table, fn_name);
+        if (sym == NULL) {
+          fprintf(stderr, "no type signature found for %s\n", sym->name);
+          continue;
+        }
+        if (sym->is_fn != 1) {
+          fprintf(stderr, "%s is not a function\n", sym->name);
+          continue;
+        }
+        if (jit_type_num_params(sym->type) != sig_node->list->len - 1) {
+          fprintf(stderr, "definition does not match type signature %s\n", sym->name);
+          continue;
+        }
+        if (compile_fn(ctx, &module->table, sig_node->list, body_node, sym) != 0) {
+          fprintf(stderr, "error compile funtion %s\n", sym->name);
+          return 1;
+        }
+      }
+    }
+    node = node->next;
   }
   return 0;
 }
 
-int compile_root (module_t* src) {
+int compile_root (node_t* node, sj_module_t* mod) {
   jit_init();
   jit_context_t ctx = jit_context_create();
 
   type_cstring = jit_type_create_pointer(jit_type_sys_char, 1);
 
-  sj_module_t mod;
-  mod.len = src->num_deps;
-  sj_module_t* deps = malloc(mod.len * sizeof(sj_module_t));
-  for (int i = 0; i < mod.len; i++) {
-    compile_module(&ctx, &src->deps[i], &deps[i]);
-  }
-  compile_module(&ctx, src, &mod);
-  sj_symbol_t* main = sj_table_get(&mod.table, "main");
+  mod->len = 0;
+  //sj_module_t* deps = malloc(mod.len * sizeof(sj_module_t));
+  //for (int i = 0; i < mod.len; i++) {
+  //  node_from_file(filename, &node);
+  //  module_compile(&ctx, &deps[i], );
+  //}
+  module_compile(&ctx, node, mod);
+
+  sj_symbol_t* main = sj_table_get(&mod->table, "main");
   if (main != NULL) {
     void* args[0];
     jit_int result;
@@ -175,6 +279,7 @@ int compile_root (module_t* src) {
     jit_context_destroy(ctx);
     return (int)result;
   } else {
+    fprintf(stderr, "no main function\n");
     jit_context_destroy(ctx);
     return 0;
   }

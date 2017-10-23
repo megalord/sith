@@ -247,22 +247,23 @@ int main (int argc, char** argv) {
     return 1;
   }
   char* filename = argv[2];
-  module_t module;
-  node_t root;
+  sj_module_t module;
   if (parse_filename(filename, &module.name) != 0) {
     return 1;
   }
+
+  node_t root;
   node_from_file(filename, &root);
   if (strcmp(argv[1], "read") == 0) {
     node_print(&root, 0);
     return 0;
   }
-  parse_module(&root, &module);
-  if (strcmp(argv[1], "parse") == 0) {
-    print_module(&module);
-    return 0;
-  }
-  int result = compile_root(&module);
+  //parse_module(&root, &module);
+  //if (strcmp(argv[1], "parse") == 0) {
+  //  print_module(&module);
+  //  return 0;
+  //}
+  int result = compile_root(&root, &module);
   printf("exited with status %u\n", result);
   return  0;
 }
