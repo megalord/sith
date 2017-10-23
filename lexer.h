@@ -1,6 +1,8 @@
 #ifndef	_LEXER_H
 #define	_LEXER_H
 
+int INDENTATION = 2;
+
 typedef struct {
   int rem, size;
   char *data;

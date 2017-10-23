@@ -1,29 +1,5 @@
 #include <jit/jit.h>
-
-typedef struct {
-  char* name;
-  int is_fn;
-  jit_type_t type;
-  union {
-    jit_value_t val;
-    jit_function_t fn;
-  } data;
-} sj_symbol_t;
-
-struct sj_symbol_table_t;
-typedef struct sj_symbol_table_t {
-  struct sj_symbol_table_t* parent;
-  int len;
-  sj_symbol_t* symbols;
-} sj_symbol_table_t;
-
-struct sj_module_t;
-typedef struct sj_module_t {
-  char* name;
-  int len;
-  struct sj_module_t* deps;
-  sj_symbol_table_t table;
-} sj_module_t;
+#include "sjit.h"
 
 jit_type_t type_cstring;
 
@@ -53,7 +29,7 @@ jit_type_t str_to_jit_type (char* type) {
   }
 }
 
-jit_type_t to_jit_type (symbol_t* symbol) {
+/*jit_type_t to_jit_type (sj_symbol_t* symbol) {
   switch (symbol->data.type) {
     case ATOM_CHAR:
     case ATOM_INT:
@@ -65,7 +41,7 @@ jit_type_t to_jit_type (symbol_t* symbol) {
   }
   fprintf(stderr, "unknown type\n");
   return jit_type_void;
-}
+}*/
 
 jit_value_t c_puts (jit_function_t* fn, char* str) {
   jit_type_t puts_signature = jit_type_create_signature(jit_abi_cdecl, jit_type_int, &type_cstring, 1, 1);
@@ -208,6 +184,7 @@ int module_compile (jit_context_t* ctx, node_t* root, sj_module_t* module) {
   }
 
   node_t* node = root->list->fst;
+  int i_dep = 0;
   int i_sym = 0;
   for (int i = 0; i < root->list->len; i++) {
     if (node->type != NODE_LIST) {
@@ -216,7 +193,15 @@ int module_compile (jit_context_t* ctx, node_t* root, sj_module_t* module) {
     }
     if (node->list->fst->type == NODE_ATOM) {
       char* name = node->list->fst->atom->name;
-      if (strcmp(name, ":") == 0) {
+      if (strcmp(name, "include") == 0) {
+        module->deps[i_dep].name = node->list->fst->next->atom->name;
+        //if (str_includes(filename, ".sith")) {
+        //  if (parse(filename, &module->deps[i_dep]) != 0) {
+        //    return 1;
+        //  }
+        //}
+        i_dep++;
+      } else if (strcmp(name, ":") == 0) {
         module->table.symbols[i_sym].name = node->list->fst->next->atom->name;
         if (node->list->fst->next->next->type == NODE_LIST) {
           module->table.symbols[i_sym].is_fn = 1;
@@ -261,14 +246,20 @@ int compile_root (node_t* node, sj_module_t* mod) {
 
   type_cstring = jit_type_create_pointer(jit_type_sys_char, 1);
 
-  mod->len = 0;
   //sj_module_t* deps = malloc(mod.len * sizeof(sj_module_t));
   //for (int i = 0; i < mod.len; i++) {
   //  node_from_file(filename, &node);
   //  module_compile(&ctx, &deps[i], );
   //}
-  module_compile(&ctx, node, mod);
+  if (module_compile(&ctx, node, mod) != 0) {
+    return 1;
+  }
 
+  //jit_context_destroy(ctx);
+  return 0;
+}
+
+int exec_main (sj_module_t* mod) {
   sj_symbol_t* main = sj_table_get(&mod->table, "main");
   if (main != NULL) {
     void* args[0];
@@ -276,11 +267,9 @@ int compile_root (node_t* node, sj_module_t* mod) {
     jit_dump_function(stdout, main->data.fn, "F [uncompiled]");
     jit_function_compile(main->data.fn);
     jit_function_apply(main->data.fn, args, &result);
-    jit_context_destroy(ctx);
     return (int)result;
   } else {
     fprintf(stderr, "no main function\n");
-    jit_context_destroy(ctx);
-    return 0;
+    return 1;
   }
 }
