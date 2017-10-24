@@ -63,7 +63,7 @@ jit_value_t c_printf (jit_function_t* fn, sj_symbol_t* symbols, int arity) {
   return jit_insn_call_native(*fn, "printf", printf, printf_signature, arg_values, arity, JIT_CALL_NOTHROW);
 }
 
-jit_value_t eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t* node) {
+int eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t* node, jit_value_t* result) {
   if (node->type == NODE_LIST) {
     int arity = node->list->len - 1;
     node = node->list->fst;
@@ -76,10 +76,12 @@ jit_value_t eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t*
     //}
 
     if (strcmp(sub_fn_name, "puts") == 0) {
-      return c_puts(fn, node->next->atom->name);
-    }
-    if (strcmp(sub_fn_name, "printf") == 0) {
-      return c_printf(fn, node->next->atom->name, arity);
+      *result = c_puts(fn, node->next->atom->name);
+    } else if (strcmp(sub_fn_name, "printf") == 0) {
+      *result = c_printf(fn, node->next->atom->name, arity);
+    } else {
+      fprintf(stderr, "symbol \"%s\" not found (%d:%d)\n", sub_fn_name, node->atom->line, node->atom->pos);
+      return 1;
     }
 
     //node = node->next;
@@ -146,7 +148,9 @@ int compile_fn (jit_context_t* ctx, sj_symbol_table_t* parent, list_t* sig, node
   // Evaluate statements in function body.
   jit_value_t result;
   while (body != NULL) {
-    result = eval_statement(&sym->data.fn, &table, body);
+    if (eval_statement(&sym->data.fn, &table, body, &result) != 0) {
+      return 1;
+    }
     body = body->next;
   }
   jit_insn_return(sym->data.fn, result);

@@ -1,5 +1,8 @@
 #include "lexer.h"
 
+unsigned int line = 1;
+unsigned int pos = 1;
+
 buffer_t buf_create (int size) {
   buffer_t buf;
   buf.rem = size - 1;
@@ -48,13 +51,21 @@ int stream_peek (stream_t* stream) {
 }
 
 int stream_read (stream_t* stream) {
+  int c;
   if (stream->next != -2) {
-    int c = stream->next;
+    c = stream->next;
     stream->next = -2;
-    return c;
   } else {
-    return fgetc(stream->source);
+    c = fgetc(stream->source);
   }
+
+  if (c == '\n') {
+    line++;
+    pos = 0;
+  } else {
+    pos++;
+  }
+  return c;
 }
 
 void read_until (stream_t* stream, buffer_t* buf, int d) {
@@ -94,6 +105,8 @@ void read_comment (stream_t* stream) {
 
 int read_atom (stream_t* stream, atom_t* atom) {
   buffer_t str;
+  atom->line = line;
+  atom->pos = pos;
   int c = stream_peek(stream);
   switch (c) {
     case '\'':
@@ -228,6 +241,9 @@ int node_from_file (char* filename, node_t* root) {
     perror("Error reading file");
     return 1;
   }
+
+  line = 0;
+  pos = 0;
   stream_t stream;
   stream.source = f;
   stream.next = -2;

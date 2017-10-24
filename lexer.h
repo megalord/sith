@@ -23,6 +23,8 @@ typedef enum {
 typedef struct {
   char *name;
   atom_type_t type;
+  unsigned int line;
+  unsigned int pos;
 } atom_t;
 
 struct node_t;
