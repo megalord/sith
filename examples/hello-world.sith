@@ -1,18 +1,8 @@
+(: hello (-> char* int))
+(defun (hello name)
+  (puts "hello")
+  (puts name))
+
 (: main (-> int))
 (defun (main)
-  (puts "hello world"))
-
-;(: main (-> int))
-;(defun (main)
-;  (printf "hello %s\n" "world"))
-;
-;(: hello (-> void char*))
-;(defun (hello name)
-;  (c.printf "hello %s\n" name)
-;  void)
-;
-;(: main (-> int))
-;(defun (main)
-;  (hello "world")
-;  ; implicit returns
-;  0)
+  (hello "world"))

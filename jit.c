@@ -1,4 +1,6 @@
 #include <jit/jit.h>
+#include <jit/jit-dump.h>
+
 #include "sjit.h"
 
 jit_type_t type_cstring;
@@ -12,13 +14,14 @@ sj_symbol_t* sj_table_get (sj_symbol_table_t* table, char* name) {
   if (table->parent != NULL) {
     return sj_table_get(table->parent, name);
   }
-  fprintf(stderr, "symbol %s not found\n", name);
   return NULL;
 }
 
 jit_type_t str_to_jit_type (char* type) {
   if (strcmp(type, "int") == 0) {
     return jit_type_int;
+  } else if (strcmp(type, "char") == 0) {
+    return jit_type_sys_char;
   } else if (strcmp(type, "char*") == 0) {
     return type_cstring;
   } else if (strcmp(type, "void") == 0) {
@@ -29,27 +32,38 @@ jit_type_t str_to_jit_type (char* type) {
   }
 }
 
-/*jit_type_t to_jit_type (sj_symbol_t* symbol) {
-  switch (symbol->data.type) {
+jit_value_t to_jit_value (jit_function_t* fn, sj_symbol_table_t* table, atom_t* atom) {
+  sj_symbol_t* sym;
+  switch (atom->type) {
     case ATOM_CHAR:
+      return jit_value_create_nint_constant(*fn, jit_type_sys_char, atoi(atom->name));
     case ATOM_INT:
-      return jit_type_int;
-    case ATOM_IDENTIFIER:
-      return str_to_jit_type(symbol->name);
+      return jit_value_create_nint_constant(*fn, jit_type_int, atoi(atom->name));
     case ATOM_STRING:
-      return type_cstring;
+      return jit_value_create_long_constant(*fn, type_cstring, (long)atom->name);
+    case ATOM_IDENTIFIER:
+      sym = sj_table_get(table, atom->name);
+      if (sym == NULL) {
+        fprintf(stderr, "value named %s not found in table\n", atom->name);
+        return NULL;
+      }
+      if (sym->is_fn) {
+        fprintf(stderr, "value %s is a function\n", atom->name);
+        return NULL;
+      }
+      return sym->data.val;
+    default:
+      fprintf(stderr, "unknown type\n");
+      return NULL;
   }
-  fprintf(stderr, "unknown type\n");
-  return jit_type_void;
-}*/
-
-jit_value_t c_puts (jit_function_t* fn, char* str) {
-  jit_type_t puts_signature = jit_type_create_signature(jit_abi_cdecl, jit_type_int, &type_cstring, 1, 1);
-  jit_value_t hostmemptr = jit_value_create_long_constant(*fn, type_cstring, (long)str);
-  return jit_insn_call_native(*fn, "puts", puts, puts_signature, &hostmemptr, 1, JIT_CALL_NOTHROW);
 }
 
-jit_value_t c_printf (jit_function_t* fn, sj_symbol_t* symbols, int arity) {
+jit_value_t c_puts (jit_function_t* fn, jit_value_t* str) {
+  jit_type_t puts_signature = jit_type_create_signature(jit_abi_cdecl, jit_type_int, &type_cstring, 1, 1);
+  return jit_insn_call_native(*fn, "puts", puts, puts_signature, str, 1, JIT_CALL_NOTHROW);
+}
+
+/*jit_value_t c_printf (jit_function_t* fn, sj_symbol_t* symbols, int arity) {
   jit_type_t* arg_types = malloc(arity * sizeof(jit_type_t));
   for (int i = 0; i < arity; i++) {
     arg_types[i] = symbols[i].type;
@@ -61,39 +75,47 @@ jit_value_t c_printf (jit_function_t* fn, sj_symbol_t* symbols, int arity) {
   jit_type_t printf_signature = jit_type_create_signature(jit_abi_cdecl, jit_type_int, arg_types, arity, 1);
   //jit_value_t hostmemptr = jit_value_create_long_constant(*fn, type_cstring, (long)str);
   return jit_insn_call_native(*fn, "printf", printf, printf_signature, arg_values, arity, JIT_CALL_NOTHROW);
-}
+}*/
 
 int eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t* node, jit_value_t* result) {
   if (node->type == NODE_LIST) {
     int arity = node->list->len - 1;
     node = node->list->fst;
     char* sub_fn_name = node->atom->name;
-    //for (int i = 0; i < arity; i++) {
-    //  node = node->next;
-    //  if (node->type == NODE_ATOM) {
-    //    symbols[i]
-    //  }
-    //}
+
+    jit_value_t* args = malloc(arity * sizeof(jit_value_t));
+    for (int i = 0; i < arity; i++) {
+      node = node->next;
+      if (node->type == NODE_LIST) {
+        eval_statement(fn, table, node, &args[i]);
+      } else {
+        args[i] = to_jit_value(fn, table, node->atom);
+      }
+    }
 
     if (strcmp(sub_fn_name, "puts") == 0) {
-      *result = c_puts(fn, node->next->atom->name);
-    } else if (strcmp(sub_fn_name, "printf") == 0) {
+      *result = c_puts(fn, args);
+      return 0;
+    /*} else if (strcmp(sub_fn_name, "printf") == 0) {
       *result = c_printf(fn, node->next->atom->name, arity);
-    } else {
+      return 0;*/
+    }
+
+    sj_symbol_t* sym = sj_table_get(table, sub_fn_name);
+    if (sym == NULL) {
       fprintf(stderr, "symbol \"%s\" not found (%d:%d)\n", sub_fn_name, node->atom->line, node->atom->pos);
       return 1;
     }
+    if (!sym->is_fn) {
+      fprintf(stderr, "symbol \"%s\" is not a function (%d:%d)\n", sub_fn_name, node->atom->line, node->atom->pos);
+      return 1;
+    }
 
-    //node = node->next;
-    //jit_value_t* args = malloc(arity * sizeof(jit_value_t));
-    //for (int i = 0; i < arity; i++) {
-    //  // needs to first eval if list
-    //  args[i] = node->atom->name; // ???
-    //  node = node->next;
-    //}
-    //jit_value_t tmp = jit_insn_call(fn, sub_fn_name, sj_table_get(table, sub_fn_name), 0, args, arity, 0);
+    *result = jit_insn_call(*fn, sym->name, sym->data.fn, NULL, args, arity, 0);
+    return 0;
   }
-  return 0;
+  fprintf(stderr, "cannot eval atoms\n");
+  return 1;
 }
 
 int parse_signature (list_t* list, jit_type_t* type) {
@@ -125,6 +147,8 @@ int parse_signature (list_t* list, jit_type_t* type) {
 }
 
 int compile_fn (jit_context_t* ctx, sj_symbol_table_t* parent, list_t* sig, node_t* body, sj_symbol_t* sym) {
+  sym->data.fn = jit_function_create(*ctx, sym->type);
+
   sj_symbol_table_t table;
   table.len = sig->len - 1;
   table.symbols = malloc(table.len * sizeof(sj_symbol_t));
@@ -143,7 +167,6 @@ int compile_fn (jit_context_t* ctx, sj_symbol_table_t* parent, list_t* sig, node
     table.symbols[i].is_fn = 0;
     node = node->next;
   }
-  sym->data.fn = jit_function_create(*ctx, sym->type);
 
   // Evaluate statements in function body.
   jit_value_t result;
@@ -155,6 +178,9 @@ int compile_fn (jit_context_t* ctx, sj_symbol_table_t* parent, list_t* sig, node
   }
   jit_insn_return(sym->data.fn, result);
 
+  fprintf(stdout, "%s: ", sym->name);
+  jit_dump_function(stdout, sym->data.fn, "F [uncompiled]");
+  jit_function_compile(sym->data.fn);
   return 0;
 }
 
@@ -268,8 +294,6 @@ int exec_main (sj_module_t* mod) {
   if (main != NULL) {
     void* args[0];
     jit_int result;
-    jit_dump_function(stdout, main->data.fn, "F [uncompiled]");
-    jit_function_compile(main->data.fn);
     jit_function_apply(main->data.fn, args, &result);
     return (int)result;
   } else {
