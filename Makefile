@@ -6,3 +6,6 @@ sith: main.c debug.c lexer.c jit.c
 
 hello-world: sith
 	./main build examples/hello-world.sith
+
+conditional: sith
+	./main build examples/conditional.sith

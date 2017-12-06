@@ -1,0 +1,5 @@
+(: main (-> int))
+(defun (main)
+  (if (eq 0 0)
+    (puts "true")
+    (puts "false")))

@@ -77,11 +77,40 @@ jit_value_t c_puts (jit_function_t* fn, jit_value_t* str) {
   return jit_insn_call_native(*fn, "printf", printf, printf_signature, arg_values, arity, JIT_CALL_NOTHROW);
 }*/
 
+int eval_if(jit_function_t* fn, sj_symbol_table_t* table, node_t* node, jit_value_t* result) {
+  node = node->next;
+  jit_value_t condition;
+  eval_statement(fn, table, node, &condition);
+  jit_label_t label = jit_label_undefined;
+  jit_label_t end = jit_label_undefined;
+  jit_insn_branch_if_not(*fn, condition, &label);
+
+  node = node->next;
+  jit_value_t if_result;
+  eval_statement(fn, table, node, &if_result);
+  *result = jit_value_create(*fn, jit_value_get_type(if_result));
+  jit_insn_store(*fn, *result, if_result);
+  jit_insn_branch(*fn, &end);
+
+  jit_insn_label(*fn, &label);
+  node = node->next;
+  jit_value_t else_result;
+  eval_statement(fn, table, node, &else_result);
+  jit_insn_store(*fn, *result, else_result);
+  jit_insn_label(*fn, &end);
+  return 0;
+}
+
 int eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t* node, jit_value_t* result) {
   if (node->type == NODE_LIST) {
     int arity = node->list->len - 1;
     node = node->list->fst;
     char* sub_fn_name = node->atom->name;
+
+    // handle special statements first
+    if (strcmp(sub_fn_name, "if") == 0) {
+      return eval_if(fn, table, node, result);
+    }
 
     jit_value_t* args = malloc(arity * sizeof(jit_value_t));
     for (int i = 0; i < arity; i++) {
@@ -95,6 +124,9 @@ int eval_statement(jit_function_t* fn, sj_symbol_table_t* table, node_t* node, j
 
     if (strcmp(sub_fn_name, "puts") == 0) {
       *result = c_puts(fn, args);
+      return 0;
+    } else if (strcmp(sub_fn_name, "eq") == 0) {
+      *result = jit_insn_eq(*fn, args[0], args[1]);
       return 0;
     /*} else if (strcmp(sub_fn_name, "printf") == 0) {
       *result = c_printf(fn, node->next->atom->name, arity);
