@@ -202,7 +202,7 @@ int read_node (stream_t* stream, node_t* node) {
   return 0;
 }
 
-char* atom_print_type (atom_type_t type) {
+const char* atom_print_type (atom_type_t type) {
   switch (type) {
     case ATOM_CHAR:
       return "char";

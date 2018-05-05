@@ -4,11 +4,13 @@
 #include <string.h>
 #include "version.h"
 #include "lexer.c"
-#include "jit.c"
+//#include "jit.c"
+#include "module.c"
 #include "debug.c"
 
 int str_includes (char* input, char* test) {
-  if (strlen(test) == 0) {
+  int len = strlen(test);
+  if (len == 0) {
     return 1;
   } else {
     if (strlen(input) == 0) {
@@ -19,7 +21,7 @@ int str_includes (char* input, char* test) {
   if (fst == NULL) {
     return 0;
   }
-  for (int i = 0; i < strlen(test); i = i + 1) {
+  for (int i = 0; i < len; i = i + 1) {
     if (fst[i] != test[i]) {
       return 0;
     }
@@ -64,7 +66,7 @@ int main (int argc, char** argv) {
     return 1;
   }
   char* filename = argv[2];
-  sj_module_t module;
+  module_t module;
   if (parse_filename(filename, &module.name) != 0) {
     return 1;
   }
@@ -76,7 +78,7 @@ int main (int argc, char** argv) {
     return 0;
   }
 
-  if (compile_root(&root, &module) != 0) {
+  if (module_compile(&root, &module) != 0) {
     return 1;
   }
 
@@ -84,7 +86,7 @@ int main (int argc, char** argv) {
     module_print(&module);
     return 0;
   }
-  int result = exec_main(&module);
-  printf("exited with status %u\n", result);
+  //int result = exec_main(&module);
+  //printf("exited with status %u\n", result);
   return  0;
 }
