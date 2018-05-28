@@ -1,6 +1,5 @@
 #include "module.h"
 
-void symbol_table_print (symbol_table_t* table, int depth);
 symbol_t* symbol_table_get (symbol_table_t* table, char* name) {
   for (int i = 0; i < table->num_symbols; i++) {
     if (strcmp(table->symbols[i].name, name) == 0) {
@@ -73,7 +72,7 @@ int module_setup (module_t* module, node_t* root) {
   return 0;
 }
 
-int module_compile (node_t* root, module_t* module) {
+int module_parse (node_t* root, module_t* module) {
   if (module_setup(module, root) != 0) {
     return 1;
   }
@@ -106,7 +105,6 @@ int module_compile (node_t* root, module_t* module) {
         i_sym++;
       } else if (strcmp(name, "defun") == 0) {
         node_t* sig_node = node->list->fst->next;
-        //node_t* body_node = sig_node->next;
         if (sig_node->type != NODE_LIST || sig_node->list->fst->type != NODE_ATOM) {
           fprintf(stderr, "invalid arg list\n");
           continue;
@@ -125,10 +123,17 @@ int module_compile (node_t* root, module_t* module) {
           fprintf(stderr, "%s definition does not match type signature\n", sym->name);
           continue;
         }
-        //if (compile_fn(ctx, &module->table, sig_node->list, body_node, sym) != 0) {
-        //  fprintf(stderr, "error compile funtion %s\n", sym->name);
-        //  return 1;
-        //}
+        sym->type.field_names = malloc((sym->type.num_fields - 1) * sizeof(char*));
+        node_t* param_node = sig_node->list->fst->next; // skip function name
+        for (int j = 0; j < sym->type.num_fields - 1; j++) {
+          if (param_node->type != NODE_ATOM || param_node->atom->type != ATOM_IDENTIFIER) {
+            fprintf(stderr, "Function parameter arguments must be atoms");
+            return 1;
+          }
+          sym->type.field_names[j] = param_node->atom->name;
+          param_node = param_node->next;
+        }
+        sym->data = sig_node->next;
       }
     }
     node = node->next;

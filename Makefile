@@ -10,7 +10,7 @@ hello-world: sith
 conditional: sith
 	./main build examples/conditional.sith
 
-main.o: main.c debug.c lexer.c module.c #jit.c
+main.o: main.c debug.c lexer.c module.c jit.c
 	clang -g `llvm-config --cflags` -c $<
 
 llvm: main.o

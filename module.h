@@ -1,6 +1,8 @@
 #ifndef	_MODULE_H
 #define	_MODULE_H
 
+#include <llvm-c/Core.h>
+
 typedef enum {
   TYPE_PRIM,
   TYPE_FUNC,
@@ -25,11 +27,8 @@ typedef struct type_t {
 typedef struct {
   char* name;
   type_t type;
-  node_t* data; // ?, values?
-  /*union {
-    value_t val;
-    function_t fn;
-  } data;*/
+  node_t* data;
+  LLVMValueRef value;
 } symbol_t;
 
 struct symbol_table_t;
@@ -48,5 +47,7 @@ typedef struct module_t {
   type_t* types;
   symbol_table_t table;
 } module_t;
+
+symbol_t* symbol_table_get (symbol_table_t* table, char* name);
 
 #endif

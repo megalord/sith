@@ -26,11 +26,12 @@ void symbol_print (symbol_t* sym, int depth) {
     printf(" %s", sym->type.fields[i].name);
   } else {
     printf("%*s ", depth, "");
-    printf("%s", sym->type.name);
+    printf("%s :: %s", sym->name, sym->type.name);
   }
 }
 
 void symbol_table_print (symbol_table_t* table, int depth) {
+  printf("TABLE (%d):\n", table->num_symbols);
   for (int i = 0; i < table->num_symbols; i++) {
     symbol_print(&table->symbols[i], depth);
     printf("\n");

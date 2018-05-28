@@ -4,7 +4,7 @@
 #include <string.h>
 #include "version.h"
 #include "lexer.c"
-//#include "jit.c"
+#include "jit.c"
 #include "module.c"
 #include "debug.c"
 
@@ -78,7 +78,7 @@ int main (int argc, char** argv) {
     return 0;
   }
 
-  if (module_compile(&root, &module) != 0) {
+  if (module_parse(&root, &module) != 0) {
     return 1;
   }
 
@@ -86,7 +86,7 @@ int main (int argc, char** argv) {
     module_print(&module);
     return 0;
   }
-  //int result = exec_main(&module);
-  //printf("exited with status %u\n", result);
+  int result = exec_main(&module);
+  printf("exited with status %u\n", result);
   return  0;
 }
