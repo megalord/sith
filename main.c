@@ -91,14 +91,18 @@ int main (int argc, char** argv) {
     return 1;
   }
 
+  if (strcmp(argv[1], "buildir") == 0) {
+    return emit_ir(&module);
+  }
+
   if (strcmp(argv[1], "build") == 0) {
-    LLVMDumpModule(module.llvm);
-    return 0;
+    return emit_object_code(&module);
   }
 
   if (strcmp(argv[1], "run") == 0) {
     int result = exec_main(&module);
     printf("exited with status %u\n", result);
+    return 0;
   }
-  return 0;
+  return 1;
 }

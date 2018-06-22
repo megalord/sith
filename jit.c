@@ -239,6 +239,50 @@ int module_compile (module_t* mod) {
   return 0;
 }
 
+int emit_ir (module_t* mod) {
+  char* error = NULL;
+  char ir_file[100];
+  snprintf(ir_file, 100, "%s.ll", mod->name);
+  if (LLVMPrintModuleToFile(mod->llvm, ir_file, &error)) {
+    fprintf(stderr, "LLVMPrintModuleToFile: %s\n", error);
+    return 1;
+  }
+  LLVMDisposeMessage(error);
+  return 0;
+}
+
+int emit_object_code (module_t* mod) {
+  LLVMInitializeNativeTarget();
+  LLVMInitializeNativeAsmPrinter();
+
+  char* triple = LLVMGetDefaultTargetTriple();
+  LLVMSetTarget(mod->llvm, triple);
+
+  char* error = NULL;
+  LLVMTargetRef target;
+  if (LLVMGetTargetFromTriple(triple, &target, &error)) {
+    fprintf(stderr, "LLVMGetTargetFromTriple: %s\n", error);
+    return 1;
+  }
+  LLVMDisposeMessage(error);
+  error = NULL;
+
+  LLVMTargetMachineRef machine = LLVMCreateTargetMachine(target, triple, "generic", "", LLVMCodeGenLevelDefault, LLVMRelocDefault, LLVMCodeModelDefault);
+  LLVMSetModuleDataLayout(mod->llvm, LLVMCreateTargetDataLayout(machine));
+
+  char object_file[100];
+  snprintf(object_file, 100, "%s.o", mod->name);
+  if (LLVMTargetMachineEmitToFile(machine, mod->llvm, object_file, LLVMObjectFile, &error)) {
+    fprintf(stderr, "LLVMTargetMachineEmitToFile: %s\n", error);
+    return 1;
+  }
+  LLVMDisposeMessage(error);
+
+  char cmd[100];
+  snprintf(cmd, 100, "clang -g %s.o -o %s", mod->name, mod->name);
+  return system(cmd);
+}
+
 int exec_main (module_t* mod) {
   LLVMLinkInMCJIT();
   LLVMInitializeNativeTarget();
