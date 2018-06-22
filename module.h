@@ -35,6 +35,7 @@ struct symbol_table_t;
 typedef struct symbol_table_t {
   struct symbol_table_t* parent; // scoping
   int num_symbols;
+  int max_symbols;
   symbol_t* symbols;
 } symbol_table_t;
 
@@ -46,8 +47,11 @@ typedef struct module_t {
   int num_types;
   type_t* types;
   symbol_table_t table;
+  LLVMModuleRef llvm;
 } module_t;
 
 symbol_t* symbol_table_get (symbol_table_t* table, char* name);
+symbol_t* symbol_table_add (symbol_table_t* table, symbol_t* symbol);
+symbol_t* module_deps_symbol_find (module_t *mod, char* name);
 
 #endif

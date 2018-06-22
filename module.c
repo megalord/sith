@@ -12,6 +12,31 @@ symbol_t* symbol_table_get (symbol_table_t* table, char* name) {
   return NULL;
 }
 
+symbol_t* symbol_table_add (symbol_table_t* table, symbol_t* symbol) {
+  if (table->num_symbols == table->max_symbols) {
+    table->max_symbols = table->max_symbols * 2;
+    symbol_t* symbols = malloc(sizeof(symbol_t) * table->max_symbols);
+    memcpy(symbols, table->symbols, sizeof(symbol_t) * table->num_symbols);
+    free(table->symbols);
+    table->symbols = symbols;
+  }
+  symbol_t* copy = table->symbols + table->num_symbols;
+  table->symbols[table->num_symbols] = *symbol;
+  table->num_symbols++;
+  return copy;
+}
+
+symbol_t* module_deps_symbol_find (module_t *mod, char* name) {
+  symbol_t* sym;
+  for (int i = 0; i < mod->num_deps; i++) {
+    sym = symbol_table_get(&mod->deps[i].table, name);
+    if (sym != NULL) {
+      return sym;
+    }
+  }
+  return NULL;
+}
+
 int module_parse_func_type (list_t* list, type_t* type) {
   type->num_fields = list->len - 1;
   node_t* node = list->fst;
@@ -51,6 +76,7 @@ int module_parse_func_type (list_t* list, type_t* type) {
 int module_setup (module_t* module, node_t* root) {
   module->num_deps = 0;
   module->table.num_symbols = 0;
+  module->table.max_symbols = 0;
   module->table.parent = NULL;
   if (root->type != NODE_LIST) {
     fprintf(stderr, "root node must be a list\n");
@@ -68,7 +94,8 @@ int module_setup (module_t* module, node_t* root) {
     node = node->next;
   }
   module->deps = malloc(module->num_deps * sizeof(module_t));
-  module->table.symbols = malloc(module->table.num_symbols * sizeof(symbol_t));
+  module->table.max_symbols = module->table.num_symbols;
+  module->table.symbols = malloc(module->table.max_symbols * sizeof(symbol_t));
   return 0;
 }
 
@@ -89,11 +116,15 @@ int module_parse (node_t* root, module_t* module) {
       char* name = node->list->fst->atom->name;
       if (strcmp(name, "include") == 0) {
         module->deps[i_dep].name = node->list->fst->next->atom->name;
-        //if (str_includes(filename, ".sith")) {
-        //  if (parse(filename, &module->deps[i_dep]) != 0) {
-        //    return 1;
-        //  }
-        //}
+        if (str_includes(module->deps[i_dep].name, ".sith")) {
+          node_t dep_root;
+          if (node_from_file(module->deps[i_dep].name, &dep_root) != 0) {
+            return 1;
+          }
+          if (module_parse(&dep_root, &module->deps[i_dep]) != 0) {
+            return 1;
+          }
+        }
         i_dep++;
       } else if (strcmp(name, ":") == 0) {
         module->table.symbols[i_sym].name = node->list->fst->next->atom->name;

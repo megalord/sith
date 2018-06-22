@@ -14,4 +14,4 @@ main.o: main.c debug.c lexer.c module.c jit.c
 	clang -g `llvm-config --cflags` -c $<
 
 llvm: main.o
-	clang++ $< `llvm-config --cxxflags --ldflags --libs core executionengine mcjit interpreter analysis native bitwriter --system-libs` -o main-llvm
+	clang++ $< `llvm-config --cxxflags --ldflags --libs core executionengine mcjit interpreter irreader analysis native bitwriter --system-libs` -o main-llvm

@@ -3,6 +3,7 @@
 #include <llvm-c/Target.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/BitWriter.h>
+#include <llvm-c/IRReader.h>
 
 #include "module.h"
 
@@ -38,17 +39,7 @@ LLVMAttributeRef nounwind_attr;
   return 0;
 }*/
 
-// declare i32 @puts(i8* nocapture) nounwind
-LLVMValueRef def_puts (LLVMModuleRef ll_mod) {
-  LLVMTypeRef param_types[] = { LLVMPointerType(LLVMInt8Type(), 0) };
-  LLVMTypeRef fn_type = LLVMFunctionType(LLVMInt32Type(), param_types, 1, 0);
-  LLVMValueRef fn = LLVMAddFunction(ll_mod, "puts", fn_type);
-  LLVMAddAttributeAtIndex(fn, 1, nocapture_attr);
-  LLVMAddAttributeAtIndex(fn, LLVMAttributeFunctionIndex, nounwind_attr);
-  return fn;
-}
-
-int eval_statement(LLVMBuilderRef builder, symbol_table_t* table, node_t* node, LLVMValueRef* result) {
+int eval_statement(LLVMBuilderRef builder, module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef* result) {
   if (node->type == NODE_LIST) {
     int arity = node->list->len - 1;
     node = node->list->fst;
@@ -65,7 +56,7 @@ int eval_statement(LLVMBuilderRef builder, symbol_table_t* table, node_t* node, 
     for (int i = 0; i < arity; i++) {
       node = node->next;
       if (node->type == NODE_LIST) {
-        eval_result = eval_statement(builder, table, node, &args[i]);
+        eval_result = eval_statement(builder, mod, table, node, &args[i]);
         if (eval_result != 0) {
           return eval_result;
         }
@@ -106,6 +97,13 @@ int eval_statement(LLVMBuilderRef builder, symbol_table_t* table, node_t* node, 
 
     symbol_t* sym = symbol_table_get(table, sub_fn_name);
     if (sym == NULL) {
+      sym = module_deps_symbol_find(mod, sub_fn_name);
+      if (sym != NULL) {
+        sym = symbol_table_add(&mod->table, sym);
+        sym->value = LLVMAddFunction(mod->llvm, sym->name, LLVMGetElementType(LLVMTypeOf(sym->value)));
+      }
+    }
+    if (sym == NULL) {
       fprintf(stderr, "symbol \"%s\" not found (%d:%d)\n", sub_fn_name, node->atom->line, node->atom->pos);
       return 1;
     }
@@ -131,7 +129,7 @@ LLVMTypeRef type_to_llvm (type_t* type) {
   }
 }
 
-int compile_fn (LLVMModuleRef ll_mod, module_t* mod, symbol_t* sym) {
+int compile_fn (module_t* mod, symbol_t* sym) {
   type_t type = sym->type;
   int i;
   LLVMTypeRef* param_types = malloc((type.num_fields - 1) * sizeof(LLVMTypeRef));
@@ -140,10 +138,11 @@ int compile_fn (LLVMModuleRef ll_mod, module_t* mod, symbol_t* sym) {
   }
   LLVMTypeRef ret_type = type_to_llvm(&type.fields[i]);
   LLVMTypeRef fn_type = LLVMFunctionType(ret_type, param_types, type.num_fields - 1, 0);
-  sym->value = LLVMAddFunction(ll_mod, sym->name, fn_type);
+  sym->value = LLVMAddFunction(mod->llvm, sym->name, fn_type);
 
   symbol_table_t* table = malloc(sizeof(symbol_table_t));
   table->num_symbols = type.num_fields - 1;
+  table->max_symbols = table->num_symbols;
   table->parent = &mod->table;
 
   //LLVMValueRef* params = malloc((type.num_fields - 1) * sizeof(LLVMValueRef));
@@ -166,7 +165,7 @@ int compile_fn (LLVMModuleRef ll_mod, module_t* mod, symbol_t* sym) {
   LLVMValueRef result;
   node_t* body = sym->data;
   while (body != NULL) {
-    if (eval_statement(builder, table, body, &result) != 0) {
+    if (eval_statement(builder, mod, table, body, &result) != 0) {
       return 1;
     }
     body = body->next;
@@ -175,15 +174,68 @@ int compile_fn (LLVMModuleRef ll_mod, module_t* mod, symbol_t* sym) {
   return 0;
 }
 
-int module_compile (LLVMModuleRef ll_mod, module_t* mod) {
+int parse_ir (module_t* mod) {
+  LLVMMemoryBufferRef buf;
+  char* msg = NULL;
+
+  if (LLVMCreateMemoryBufferWithContentsOfFile(mod->name, &buf, &msg)) {
+    fprintf(stderr, "Error reading file: %s\n", msg);
+    return 1;
+  }
+
+  mod->llvm = LLVMModuleCreateWithName(mod->name);
+  if (LLVMParseIRInContext(LLVMGetGlobalContext(), buf, &mod->llvm, &msg) != 0) {
+    fprintf(stderr, "error parsing IR: %s\n", msg);
+    return 1;
+  }
+
+  mod->table.parent = NULL;
+  mod->table.num_symbols = 1;
+  mod->table.symbols = malloc(sizeof(symbol_t));
+  mod->table.symbols[0].name = malloc(5);
+  strncpy(mod->table.symbols[0].name, "puts", 5);
+  mod->table.symbols[0].data = NULL;
+  mod->table.symbols[0].type = (type_t) { .meta = TYPE_FUNC, .num_fields = 0, .fields = NULL };
+  mod->table.symbols[0].type.name = malloc(6);
+  strncpy(mod->table.symbols[0].type.name, "char*", 6);
+  mod->table.symbols[0].value = LLVMGetNamedFunction(mod->llvm, "puts");
+
+  //LLVMDisposeMemoryBuffer(buf);
+  //LLVMDumpModule(mod->llvm);
+  return 0;
+}
+
+int module_compile (module_t* mod) {
+  for (int i = 0; i < mod->num_deps; i++) {
+    if (str_includes(mod->deps[i].name, ".ll")) {
+      if (parse_ir(&mod->deps[i]) != 0) {
+        return 1;
+      }
+    } else {
+      if (module_compile(&mod->deps[i]) != 0) {
+        return 1;
+      }
+    }
+  }
+  mod->llvm = LLVMModuleCreateWithName(mod->name);
   symbol_t* sym;
-  for (int i = 0; i < mod->table.num_symbols; i++) {
+  int len = mod->table.num_symbols;
+  for (int i = 0; i < len; i++) {
     sym = &mod->table.symbols[i];
-    if (compile_fn(ll_mod, mod, sym) != 0) {
+    if (compile_fn(mod, sym) != 0) {
       fprintf(stderr, "error compile funtion %s\n", sym->name);
       return 1;
     }
   }
+
+  char* error = NULL;
+  if (LLVMVerifyModule(mod->llvm, LLVMReturnStatusAction, &error) != 0) {
+    fprintf(stderr, "error: %s\n", error);
+    LLVMDisposeMessage(error);
+    return 1;
+  }
+  LLVMDisposeMessage(error);
+
   return 0;
 }
 
@@ -192,47 +244,9 @@ int exec_main (module_t* mod) {
   LLVMInitializeNativeTarget();
   LLVMInitializeNativeAsmPrinter();
 
-  LLVMModuleRef ll_mod = LLVMModuleCreateWithName(mod->name);
-
-  unsigned nounwind_attr_id = LLVMGetEnumAttributeKindForName("nounwind", sizeof("nounwind") - 1);
-  nounwind_attr = LLVMCreateEnumAttribute(LLVMGetGlobalContext(), nounwind_attr_id, 0);
-
-  unsigned nocapture_attr_id = LLVMGetEnumAttributeKindForName("nocapture", sizeof("nocapture") - 1);
-  nocapture_attr = LLVMCreateEnumAttribute(LLVMGetGlobalContext(), nocapture_attr_id, 0);
-
-  //LLVMModuleRef ll_std_mod = LLVMModuleCreateWithName("std");
-  symbol_table_t* deps_table = malloc(sizeof(symbol_table_t));
-  deps_table->parent = NULL;
-  deps_table->num_symbols = 1;
-  deps_table->symbols = malloc(sizeof(symbol_t));
-  deps_table->symbols[0].name = malloc(5);
-  strncpy(deps_table->symbols[0].name, "puts", 5);
-  deps_table->symbols[0].data = NULL;
-  deps_table->symbols[0].type = (type_t) { .meta = TYPE_FUNC, .num_fields = 0, .fields = NULL };
-  deps_table->symbols[0].type.name = malloc(6);
-  strncpy(deps_table->symbols[0].type.name, "char*", 6);
-  deps_table->symbols[0].value = def_puts(ll_mod);
-  mod->table.parent = deps_table;
-
-  //Assertion failed: (isa<X>(Val) && "cast<Ty>() argument of incompatible type!"), function cast, file /Users/jord7580/dev/llvm/include/llvm/Support/Casting.h, line 255.
-  //for (int i = 0; i < deps_table.num_symbols; i++) {
-  //  LLVMDumpValue(deps_table.symbols[0].value);
-  //  LLVMDumpType(LLVMTypeOf(deps_table.symbols[0].value));
-  //  LLVMAddFunction(ll_mod, deps_table.symbols[0].name, LLVMTypeOf(deps_table.symbols[0].value));
-  //}
-
-  if (module_compile(ll_mod, mod) != 0) {
-    return 1;
-  }
-
   char* error = NULL;
-  LLVMVerifyModule(ll_mod, LLVMAbortProcessAction, &error);
-  LLVMDisposeMessage(error);
-
-  puts("LLVMCreateExecutionEngineForModule");
-  error = NULL;
   LLVMExecutionEngineRef engine;
-  if (LLVMCreateExecutionEngineForModule(&engine, ll_mod, &error) != 0) {
+  if (LLVMCreateExecutionEngineForModule(&engine, mod->llvm, &error) != 0) {
     fprintf(stderr, "failed to create execution engine\n");
     abort();
   }
@@ -241,12 +255,11 @@ int exec_main (module_t* mod) {
     LLVMDisposeMessage(error);
     exit(EXIT_FAILURE);
   }
-  LLVMDumpModule(ll_mod);
 
   symbol_t* main = symbol_table_get(&mod->table, "main");
   if (main != NULL) {
-    fn_zero_arg_t fn = (fn_zero_arg_t)LLVMGetPointerToGlobal(engine, main->value);
-    return (int)fn();
+    int (*fn)(void) = LLVMGetPointerToGlobal(engine, main->value);
+    return (*fn)();
   } else {
     fprintf(stderr, "no main function\n");
     return 1;

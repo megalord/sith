@@ -1,3 +1,5 @@
+(include "/usr/local/lib/sith/c/stdio.ll")
+
 (: hello (-> char* int))
 (defun (hello name)
   (puts "hello")

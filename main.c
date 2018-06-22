@@ -54,7 +54,7 @@ int parse_filename (char* filename, char** basename) {
 
 int main (int argc, char** argv) {
   if (argc == 1) {
-    puts("sith compiler\n\nUsage:\n  sith [command]\n\nAvailable Commands:\n  build\n  parse\n  read\n  version");
+    puts("sith compiler\n\nUsage:\n  sith [command]\n\nAvailable Commands:\n  build\n  parse\n  read\n  run\n  version");
     return 0;
   }
   if (strcmp(argv[1], "version") == 0) {
@@ -86,7 +86,19 @@ int main (int argc, char** argv) {
     module_print(&module);
     return 0;
   }
-  int result = exec_main(&module);
-  printf("exited with status %u\n", result);
-  return  0;
+
+  if (module_compile(&module) != 0) {
+    return 1;
+  }
+
+  if (strcmp(argv[1], "build") == 0) {
+    LLVMDumpModule(module.llvm);
+    return 0;
+  }
+
+  if (strcmp(argv[1], "run") == 0) {
+    int result = exec_main(&module);
+    printf("exited with status %u\n", result);
+  }
+  return 0;
 }
