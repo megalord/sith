@@ -7,4 +7,5 @@
 
 (: main (-> int))
 (defun (main)
-  (hello "world"))
+  (hello "world")
+  0)

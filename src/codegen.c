@@ -119,8 +119,16 @@ int eval_statement(LLVMBuilderRef builder, module_t* mod, symbol_table_t* table,
 
     *result = LLVMBuildCall(builder, sym->value, args, arity, sym->name);
     return 0;
+  } else {
+    switch (node->atom->type) {
+      case ATOM_INT:
+        *result = LLVMConstInt(LLVMInt32Type(), atoi(node->atom->name), 0);
+        return 0;
+      default:
+        fprintf(stderr, "cannot eval atom type %d\n", node->atom->type);
+        return 1;
+    }
   }
-  fprintf(stderr, "cannot eval atoms\n");
   return 1;
 }
 
