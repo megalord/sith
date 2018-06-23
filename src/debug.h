@@ -1,17 +1,34 @@
-#include <jit/jit.h>
+#ifndef	_DEBUG_H
+#define	_DEBUG_H
+
 #include "lexer.h"
 
-/*void print_type (type_t* type) {
-  if (type == jit_type_int) {
-    printf("int");
-  } else if (type == jit_type_void) {
-    printf("void");
-  } else if (type == type_cstring) {
-    printf("char*");
-  } else {
-    printf("unknown");
+const char* atom_print_type (atom_type_t type) {
+  switch (type) {
+    case ATOM_CHAR:
+      return "char";
+    case ATOM_IDENTIFIER:
+      return "symbol";
+    case ATOM_INT:
+      return "int";
+    case ATOM_STRING:
+      return "str";
   }
-}*/
+}
+
+void node_print (node_t* node, int depth) {
+  if (node->type == NODE_ATOM) {
+    printf("%*s %s: %s\n", depth, "", atom_print_type(node->atom->type), node->atom->name);
+  } else {
+    if (node->type == NODE_LIST) {
+      printf("%*s list: %d\n", depth, "", node->list->len);
+      node_print(node->list->fst, depth + INDENTATION);
+    }
+  }
+  if (node->next != NULL) {
+    node_print(node->next, depth);
+  }
+}
 
 void symbol_print (symbol_t* sym, int depth) {
   if (sym->type.meta == TYPE_FUNC) {
@@ -55,3 +72,5 @@ void module_print (module_t* module) {
     module_print(&module->deps[i]);
   }
 }
+
+#endif

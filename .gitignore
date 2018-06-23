@@ -2,4 +2,5 @@ examples/*
 !examples/*.sith
 main
 main.dSYM
-version.h
+src/version.h
+src/*.o

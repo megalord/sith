@@ -1,11 +1,16 @@
-#include <llvm-c/Core.h>
-#include <llvm-c/ExecutionEngine.h>
-#include <llvm-c/Target.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <llvm-c/Analysis.h>
 #include <llvm-c/BitWriter.h>
+#include <llvm-c/Core.h>
+#include <llvm-c/ExecutionEngine.h>
 #include <llvm-c/IRReader.h>
+#include <llvm-c/Target.h>
 
 #include "module.h"
+#include "utils.h"
 
 typedef void* (*fn_zero_arg_t) ();
 typedef void* (*fn_one_arg_t) (void*);

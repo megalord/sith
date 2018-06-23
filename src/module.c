@@ -1,4 +1,10 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "lexer.h"
 #include "module.h"
+#include "utils.h"
 
 symbol_t* symbol_table_get (symbol_table_t* table, char* name) {
   for (int i = 0; i < table->num_symbols; i++) {

@@ -1,7 +1,7 @@
 #ifndef	_LEXER_H
 #define	_LEXER_H
 
-int INDENTATION = 2;
+int INDENTATION;
 
 typedef struct {
   int rem, size;
@@ -46,5 +46,6 @@ typedef struct node_t {
 } node_t;
 
 int read_node (stream_t *stream, node_t *node);
+int node_from_file (char* filename, node_t* root);
 
 #endif

@@ -3,6 +3,8 @@
 
 #include <llvm-c/Core.h>
 
+#include "lexer.h"
+
 typedef enum {
   TYPE_PRIM,
   TYPE_FUNC,
@@ -53,5 +55,6 @@ typedef struct module_t {
 symbol_t* symbol_table_get (symbol_table_t* table, char* name);
 symbol_t* symbol_table_add (symbol_table_t* table, symbol_t* symbol);
 symbol_t* module_deps_symbol_find (module_t *mod, char* name);
+int module_parse (node_t* root, module_t* module);
 
 #endif
