@@ -9,6 +9,7 @@
 #include <llvm-c/IRReader.h>
 #include <llvm-c/Target.h>
 
+#include "codegen.h"
 #include "module.h"
 #include "utils.h"
 
@@ -20,40 +21,45 @@ typedef void* (*fn_three_arg_t) (void*, void*, void*);
 LLVMAttributeRef nocapture_attr;
 LLVMAttributeRef nounwind_attr;
 
-/*int eval_if(jit_function_t* fn, sj_symbol_table_t* table, node_t* node, jit_value_t* result) {
-  node = node->next;
-  jit_value_t condition;
-  eval_statement(fn, table, node, &condition);
-  jit_label_t label = jit_label_undefined;
-  jit_label_t end = jit_label_undefined;
-  jit_insn_branch_if_not(*fn, condition, &label);
+int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef fn, LLVMBuilderRef builder, LLVMValueRef* result) {
+  LLVMValueRef condition, results[2];
+  LLVMBasicBlockRef bbs[2] = {
+    LLVMAppendBasicBlock(fn, "then"),
+    LLVMAppendBasicBlock(fn, "else")
+  };
+  LLVMBasicBlockRef end_bb = LLVMAppendBasicBlock(fn, "if_cont");
 
   node = node->next;
-  jit_value_t if_result;
-  eval_statement(fn, table, node, &if_result);
-  *result = jit_value_create(*fn, jit_value_get_type(if_result));
-  jit_insn_store(*fn, *result, if_result);
-  jit_insn_branch(*fn, &end);
+  if (eval_statement(mod, table, node, fn, builder, &condition) != 0) {
+    return 1;
+  }
+  LLVMBuildCondBr(builder, condition, bbs[0], bbs[1]);
 
-  jit_insn_label(*fn, &label);
-  node = node->next;
-  jit_value_t else_result;
-  eval_statement(fn, table, node, &else_result);
-  jit_insn_store(*fn, *result, else_result);
-  jit_insn_label(*fn, &end);
+  for (int i = 0; i < 2; i++) {
+    LLVMPositionBuilderAtEnd(builder, bbs[i]);
+    node = node->next;
+    if (eval_statement(mod, table, node, fn, builder, results + i) != 0) {
+      return 1;
+    }
+    LLVMBuildBr(builder, end_bb);
+  }
+
+  LLVMPositionBuilderAtEnd(builder, end_bb);
+  *result = LLVMBuildPhi(builder, LLVMTypeOf(results[0]), "iftmp");
+  LLVMAddIncoming(*result, results, bbs, 2);
   return 0;
-}*/
+}
 
-int eval_statement(LLVMBuilderRef builder, module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef* result) {
+int eval_statement(module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef fn, LLVMBuilderRef builder, LLVMValueRef* result) {
   if (node->type == NODE_LIST) {
     int arity = node->list->len - 1;
     node = node->list->fst;
     char* sub_fn_name = node->atom->name;
 
     // handle special statements first
-    /*if (strcmp(sub_fn_name, "if") == 0) {
-      return eval_if(fn, table, node, result);
-    }*/
+    if (strcmp(sub_fn_name, "if") == 0) {
+      return eval_if(mod, table, node, fn, builder, result);
+    }
 
     LLVMValueRef* args = malloc(arity * sizeof(LLVMValueRef));
     symbol_t* sym_local;
@@ -61,7 +67,7 @@ int eval_statement(LLVMBuilderRef builder, module_t* mod, symbol_table_t* table,
     for (int i = 0; i < arity; i++) {
       node = node->next;
       if (node->type == NODE_LIST) {
-        eval_result = eval_statement(builder, mod, table, node, &args[i]);
+        eval_result = eval_statement(mod, table, node, fn, builder, &args[i]);
         if (eval_result != 0) {
           return eval_result;
         }
@@ -79,26 +85,25 @@ int eval_statement(LLVMBuilderRef builder, module_t* mod, symbol_table_t* table,
             args[i] = sym_local->value;
             break;
           case ATOM_INT:
-            fprintf(stderr, "ATOM_CHAR constants not supported\n");
-            return 1;
+            args[i] = LLVMConstInt(LLVMInt32Type(), atoi(node->atom->name), 0);
+            break;
           case ATOM_STRING:
             //args[i] = LLVMConstString(node->atom->name, strlen(node->atom->name), false);
             args[i] = LLVMBuildGlobalStringPtr(builder, node->atom->name, "str");
+            break;
         }
       }
     }
 
 
-    /*if (strcmp(sub_fn_name, "puts") == 0) {
-      *result = LLVMBuildCall(builder, get_puts(ll_mod), args, arity, "puts");
+    if (strcmp(sub_fn_name, "eq") == 0) {
+      if (arity != 2) {
+        fprintf(stderr, "eq called with %d args, expected 2\n", arity);
+        return 1;
+      }
+      *result = LLVMBuildICmp(builder, LLVMIntEQ, args[0], args[1], "eq");
       return 0;
-    } else if (strcmp(sub_fn_name, "eq") == 0) {
-      *result = jit_insn_eq(*fn, args[0], args[1]);
-      return 0;
-    } else if (strcmp(sub_fn_name, "printf") == 0) {
-      *result = c_printf(fn, node->next->atom->name, arity);
-      return 0;
-    }*/
+    }
 
     symbol_t* sym = symbol_table_get(table, sub_fn_name);
     if (sym == NULL) {
@@ -178,7 +183,7 @@ int compile_fn (module_t* mod, symbol_t* sym) {
   LLVMValueRef result;
   node_t* body = sym->data;
   while (body != NULL) {
-    if (eval_statement(builder, mod, table, body, &result) != 0) {
+    if (eval_statement(mod, table, body, sym->value, builder, &result) != 0) {
       return 1;
     }
     body = body->next;

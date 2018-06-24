@@ -1,5 +1,8 @@
+(include "/usr/local/lib/sith/c/stdio.ll")
+
 (: main (-> int))
 (defun (main)
   (if (eq 0 0)
     (puts "true")
-    (puts "false")))
+    (puts "false"))
+  0)

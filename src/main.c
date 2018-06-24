@@ -56,9 +56,7 @@ int main (int argc, char** argv) {
   }
 
   if (strcmp(argv[1], "run") == 0) {
-    int result = exec_main(&module);
-    printf("exited with status %u\n", result);
-    return 0;
+    return exec_main(&module);
   }
   return 1;
 }
