@@ -5,8 +5,8 @@
 
 #include "module.h"
 
-int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef fn, LLVMBuilderRef builder, LLVMValueRef* result);
-int eval_statement(module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef fn, LLVMBuilderRef builder, LLVMValueRef* result);
+int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMBuilderRef builder, LLVMValueRef* result);
+int eval_statement(module_t* mod, symbol_table_t* table, node_t* node, LLVMBuilderRef builder, LLVMValueRef* result);
 int module_compile (module_t* mod);
 int emit_ir (module_t* mod);
 int emit_object_code (module_t* mod);

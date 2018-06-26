@@ -18,11 +18,9 @@ typedef void* (*fn_one_arg_t) (void*);
 typedef void* (*fn_two_arg_t) (void*, void*);
 typedef void* (*fn_three_arg_t) (void*, void*, void*);
 
-LLVMAttributeRef nocapture_attr;
-LLVMAttributeRef nounwind_attr;
-
-int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef fn, LLVMBuilderRef builder, LLVMValueRef* result) {
+int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMBuilderRef builder, LLVMValueRef* result) {
   LLVMValueRef condition, results[2];
+  LLVMValueRef fn = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
   LLVMBasicBlockRef bbs[2] = {
     LLVMAppendBasicBlock(fn, "then"),
     LLVMAppendBasicBlock(fn, "else")
@@ -30,7 +28,7 @@ int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef fn,
   LLVMBasicBlockRef end_bb = LLVMAppendBasicBlock(fn, "if_cont");
 
   node = node->next;
-  if (eval_statement(mod, table, node, fn, builder, &condition) != 0) {
+  if (eval_statement(mod, table, node, builder, &condition) != 0) {
     return 1;
   }
   LLVMBuildCondBr(builder, condition, bbs[0], bbs[1]);
@@ -38,10 +36,11 @@ int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef fn,
   for (int i = 0; i < 2; i++) {
     LLVMPositionBuilderAtEnd(builder, bbs[i]);
     node = node->next;
-    if (eval_statement(mod, table, node, fn, builder, results + i) != 0) {
+    if (eval_statement(mod, table, node, builder, results + i) != 0) {
       return 1;
     }
     LLVMBuildBr(builder, end_bb);
+    bbs[i] = LLVMGetInsertBlock(builder);
   }
 
   LLVMPositionBuilderAtEnd(builder, end_bb);
@@ -50,7 +49,7 @@ int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef fn,
   return 0;
 }
 
-int eval_statement(module_t* mod, symbol_table_t* table, node_t* node, LLVMValueRef fn, LLVMBuilderRef builder, LLVMValueRef* result) {
+int eval_statement(module_t* mod, symbol_table_t* table, node_t* node, LLVMBuilderRef builder, LLVMValueRef* result) {
   if (node->type == NODE_LIST) {
     int arity = node->list->len - 1;
     node = node->list->fst;
@@ -58,7 +57,7 @@ int eval_statement(module_t* mod, symbol_table_t* table, node_t* node, LLVMValue
 
     // handle special statements first
     if (strcmp(sub_fn_name, "if") == 0) {
-      return eval_if(mod, table, node, fn, builder, result);
+      return eval_if(mod, table, node, builder, result);
     }
 
     LLVMValueRef* args = malloc(arity * sizeof(LLVMValueRef));
@@ -67,7 +66,7 @@ int eval_statement(module_t* mod, symbol_table_t* table, node_t* node, LLVMValue
     for (int i = 0; i < arity; i++) {
       node = node->next;
       if (node->type == NODE_LIST) {
-        eval_result = eval_statement(mod, table, node, fn, builder, &args[i]);
+        eval_result = eval_statement(mod, table, node, builder, &args[i]);
         if (eval_result != 0) {
           return eval_result;
         }
@@ -183,7 +182,7 @@ int compile_fn (module_t* mod, symbol_t* sym) {
   LLVMValueRef result;
   node_t* body = sym->data;
   while (body != NULL) {
-    if (eval_statement(mod, table, body, sym->value, builder, &result) != 0) {
+    if (eval_statement(mod, table, body, builder, &result) != 0) {
       return 1;
     }
     body = body->next;
