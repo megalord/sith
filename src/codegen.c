@@ -137,11 +137,18 @@ int eval_statement(module_t* mod, symbol_table_t* table, node_t* node, LLVMBuild
 }
 
 LLVMTypeRef type_to_llvm (type_t* type) {
-  if (strcmp(type->name, "int") == 0) {
+  if (strcmp(type->name, "I8") == 0) {
+    return LLVMInt8Type();
+  } else if (strcmp(type->name, "I32") == 0) {
     return LLVMInt32Type();
-  } else if (strcmp(type->name, "char*") == 0) {
-    return LLVMPointerType(LLVMInt8Type(), 0);
+  } else if (strcmp(type->name, "Ptr") == 0) {
+    if (type->num_fields != 1) {
+      fprintf(stderr, "Ptr type must have 1 field, got %d\n", type->num_fields);
+      return NULL;
+    }
+    return LLVMPointerType(type_to_llvm(&type->fields[0]), 0);
   } else {
+    fprintf(stderr, "cannot convert type %s\n", type->name);
     return NULL;
   }
 }
@@ -152,8 +159,14 @@ int compile_fn (module_t* mod, symbol_t* sym) {
   LLVMTypeRef* param_types = malloc((type.num_fields - 1) * sizeof(LLVMTypeRef));
   for (i = 0; i < type.num_fields - 1; i++) {
     param_types[i] = type_to_llvm(&type.fields[i]);
+    if (param_types[i] == NULL) {
+      return 1;
+    }
   }
   LLVMTypeRef ret_type = type_to_llvm(&type.fields[i]);
+  if (ret_type == NULL) {
+    return 1;
+  }
   LLVMTypeRef fn_type = LLVMFunctionType(ret_type, param_types, type.num_fields - 1, 0);
   sym->value = LLVMAddFunction(mod->llvm, sym->name, fn_type);
 

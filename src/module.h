@@ -8,6 +8,7 @@
 typedef enum {
   TYPE_PRIM,
   TYPE_FUNC,
+  TYPE_PARAM,
   TYPE_PRODUCT,
   TYPE_SUM
 } meta_type_t;

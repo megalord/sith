@@ -1,6 +1,6 @@
 (include "/usr/local/lib/sith/c/stdio.ll")
 
-(: main (-> int))
+(: main (-> I32))
 (defun (main)
   (if (eq 0 0)
     (if (eq 1 1)

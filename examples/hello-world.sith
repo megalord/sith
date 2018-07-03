@@ -1,11 +1,11 @@
 (include "/usr/local/lib/sith/c/stdio.ll")
 
-(: hello (-> char* int))
+(: hello (-> (Ptr I8) I32))
 (defun (hello name)
   (puts "hello")
   (puts name))
 
-(: main (-> int))
+(: main (-> I32))
 (defun (main)
   (hello "world")
   0)

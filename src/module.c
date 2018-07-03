@@ -43,40 +43,46 @@ symbol_t* module_deps_symbol_find (module_t *mod, char* name) {
   return NULL;
 }
 
-int module_parse_func_type (list_t* list, type_t* type) {
-  type->num_fields = list->len - 1;
-  node_t* node = list->fst;
-  if (node->type != NODE_ATOM || strcmp(node->atom->name, "->") != 0) {
-    fprintf(stderr, "invalid signature");
-    return 1;
+int parse_type (node_t* node, type_t* type) {
+  switch (node->type) {
+    case NODE_ATOM:
+      type->name = node->atom->name;
+      type->meta = TYPE_PRIM;
+      type->num_fields = 0;
+      type->fields = NULL;
+      type->field_names = NULL;
+      return 0;
+    case NODE_LIST:
+      type->num_fields = node->list->len - 1;
+      node = node->list->fst;
+      if (node->type != NODE_ATOM) {
+        fprintf(stderr, "invalid signature\n");
+        return 1;
+      }
+      type->name = node->atom->name;
+      if (strcmp(node->atom->name, "->") == 0) {
+        type->meta = TYPE_FUNC;
+      } else {
+        type->meta = TYPE_PARAM;
+      }
+      type->fields = malloc(type->num_fields * sizeof(type_t));
+      type->field_names = NULL;
+      type_t* field;
+      for (field = type->fields; field < type->fields + type->num_fields; field++) {
+        node = node->next;
+        if (parse_type(node, field) != 0) {
+          return 1;
+        }
+      }
+      if (field->meta == TYPE_FUNC) {
+        fprintf(stderr, "function return types not allowed\n");
+        return 1;
+      }
+      return 0;
+    default:
+     fprintf(stderr, "unknown node type\n");
+     return 1;
   }
-
-  type->fields = malloc(type->num_fields * sizeof(type_t));
-  type_t* field;
-  for (field = type->fields; field < type->fields + type->num_fields - 1; field++) {
-    node = node->next;
-    if (node->type != NODE_ATOM) {
-      fprintf(stderr, "only primitive arguments are allowed");
-      return 1;
-    }
-    field->name = node->atom->name;
-    field->meta = TYPE_PRIM;
-    field->num_fields = 0;
-    field->fields = NULL;
-    field->field_names = NULL;
-  }
-
-  node = node->next;
-  if (node->type != NODE_ATOM) {
-    fprintf(stderr, "only primitive return values are allowed\n");
-    return 1;
-  }
-  field->name = node->atom->name,
-  field->meta = TYPE_PRIM,
-  field->num_fields = 0,
-  field->fields = NULL;
-  field->field_names = NULL;
-  return 0;
 }
 
 int module_setup (module_t* module, node_t* root) {
@@ -134,10 +140,8 @@ int module_parse (node_t* root, module_t* module) {
         i_dep++;
       } else if (strcmp(name, ":") == 0) {
         module->table.symbols[i_sym].name = node->list->fst->next->atom->name;
-        if (node->list->fst->next->next->type == NODE_LIST) {
-          //module->table.symbols[i_sym].type.name = "Function";
-          module->table.symbols[i_sym].type.meta = TYPE_FUNC;
-          module_parse_func_type(node->list->fst->next->next->list, &module->table.symbols[i_sym].type);
+        if (parse_type(node->list->fst->next->next, &module->table.symbols[i_sym].type) != 0) {
+          return 1;
         }
         i_sym++;
       } else if (strcmp(name, "defun") == 0) {

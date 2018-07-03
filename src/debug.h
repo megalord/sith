@@ -30,21 +30,39 @@ void node_print (node_t* node, int depth) {
   }
 }
 
-void symbol_print (symbol_t* sym, int depth) {
-  if (sym->type.meta == TYPE_FUNC) {
-    printf("%*s", depth, "");
-    int arity = sym->type.num_fields;
-    printf("%s_%d ::", sym->name, arity);
-    int i;
-    for (i = 0; i < arity - 1; i++) {
-      printf(" %s", sym->type.fields[i].name);
-      printf(" ->");
-    }
-    printf(" %s", sym->type.fields[i].name);
-  } else {
-    printf("%*s ", depth, "");
-    printf("%s :: %s", sym->name, sym->type.name);
+void type_print (type_t* type) {
+  int i;
+  switch (type->meta) {
+    case TYPE_PRIM:
+      printf("%s", type->name);
+      break;
+    case TYPE_FUNC:
+      printf("_%d ::", type->num_fields);
+      for (i = 0; i < type->num_fields - 1; i++) {
+        printf(" ");
+        type_print(&type->fields[i]);
+        printf(" ->");
+      }
+      printf(" ");
+      type_print(&type->fields[i]);
+      break;
+    case TYPE_PARAM:
+      printf("(%s", type->name);
+      for (i = 0; i < type->num_fields; i++) {
+        printf(" ");
+        type_print(&type->fields[i]);
+      }
+      printf(")");
+      break;
+    default:
+      printf("???");
+      break;
   }
+}
+
+void symbol_print (symbol_t* sym, int depth) {
+  printf("%*s %s", depth, "", sym->name);
+  type_print(&sym->type);
 }
 
 void symbol_table_print (symbol_table_t* table, int depth) {
