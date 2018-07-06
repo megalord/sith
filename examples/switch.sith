@@ -1,0 +1,9 @@
+(include "/usr/local/lib/sith/c/stdio.ll")
+
+(: main (-> I32))
+(defun (main)
+  (cond 0
+    ((0 2 4) (puts "even"))
+    ((1 3 5) (puts "odd"))
+    (7 (puts "seven")))
+  0)

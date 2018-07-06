@@ -18,7 +18,7 @@ typedef void* (*fn_one_arg_t) (void*);
 typedef void* (*fn_two_arg_t) (void*, void*);
 typedef void* (*fn_three_arg_t) (void*, void*, void*);
 
-int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMBuilderRef builder, LLVMValueRef* result) {
+int eval_if(module_t* mod, symbol_table_t* table, list_t* list, LLVMBuilderRef builder, LLVMValueRef* result) {
   LLVMValueRef condition, results[2];
   LLVMValueRef fn = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
   LLVMBasicBlockRef bbs[2] = {
@@ -27,7 +27,7 @@ int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMBuilderRef b
   };
   LLVMBasicBlockRef end_bb = LLVMAppendBasicBlock(fn, "if_cont");
 
-  node = node->next;
+  node_t* node = list->fst->next;
   if (eval_statement(mod, table, node, builder, &condition) != 0) {
     return 1;
   }
@@ -49,17 +49,102 @@ int eval_if(module_t* mod, symbol_table_t* table, node_t* node, LLVMBuilderRef b
   return 0;
 }
 
+int add_case(module_t* mod, symbol_table_t* table, node_t* node, LLVMBuilderRef builder, LLVMValueRef switch_val, LLVMBasicBlockRef bb) {
+  LLVMValueRef on_val;
+  if (eval_statement(mod, table, node, builder, &on_val) != 0) {
+    return 1;
+  }
+  LLVMAddCase(switch_val, on_val, bb);
+  return 0;
+}
+
+int eval_switch(module_t* mod, symbol_table_t* table, list_t* list, LLVMBuilderRef builder, LLVMValueRef* result) {
+  LLVMValueRef condition;
+  LLVMValueRef fn = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
+
+  unsigned num_cases = list->len - 2;
+  node_t* node = list->fst->next;
+  if (eval_statement(mod, table, node, builder, &condition) != 0) {
+    return 1;
+  }
+  LLVMBasicBlockRef else_bb = LLVMAppendBasicBlock(fn, "else");
+  LLVMBasicBlockRef end_bb = LLVMAppendBasicBlock(fn, "switch_cont");
+  LLVMValueRef switch_val = LLVMBuildSwitch(builder, condition, else_bb, num_cases);
+
+  LLVMBasicBlockRef* bbs = malloc(sizeof(LLVMBasicBlockRef) * num_cases);
+  LLVMValueRef* results = malloc(sizeof(LLVMValueRef) * num_cases);
+  char case_name[8];
+  node_t* sub_node;
+  int num_exprs;
+  for (int i = 0; i < num_cases; i++) {
+    node = node->next;
+    if (node->type != NODE_LIST || node->list->len != 2) {
+      fprintf(stderr, "expected list with length 2\n");
+      return 1;
+    }
+    snprintf(case_name, 8, "case_%01d", i);
+    bbs[i] = LLVMAppendBasicBlock(fn, case_name);
+
+    sub_node = node->list->fst;
+    switch (sub_node->type) {
+      case NODE_ATOM:
+        if (add_case(mod, table, sub_node, builder, switch_val, bbs[i]) != 0) {
+          return 1;
+        }
+        break;
+      case NODE_LIST:
+        num_exprs = sub_node->list->len;
+        sub_node = sub_node->list->fst;
+        for (int j = 0; j < num_exprs; j++) {
+          if (add_case(mod, table, sub_node, builder, switch_val, bbs[i]) != 0) {
+            return 1;
+          }
+          sub_node = sub_node->next;
+        }
+        break;
+      default:
+        fprintf(stderr, "unknown node type\n");
+        return 1;
+    }
+
+    LLVMPositionBuilderAtEnd(builder, bbs[i]);
+    if (eval_statement(mod, table, node->list->fst->next, builder, &results[i]) != 0) {
+      return 1;
+    }
+    LLVMBuildBr(builder, end_bb);
+    bbs[i] = LLVMGetInsertBlock(builder);
+  }
+
+  // TODO: handle default
+  LLVMPositionBuilderAtEnd(builder, else_bb);
+  LLVMBuildUnreachable(builder);
+
+  LLVMPositionBuilderAtEnd(builder, end_bb);
+  *result = LLVMBuildPhi(builder, LLVMTypeOf(results[0]), "switchtmp");
+  LLVMAddIncoming(*result, results, bbs, num_cases);
+
+  free(bbs);
+  return 0;
+}
+
 int eval_statement(module_t* mod, symbol_table_t* table, node_t* node, LLVMBuilderRef builder, LLVMValueRef* result) {
   if (node->type == NODE_LIST) {
     int arity = node->list->len - 1;
-    node = node->list->fst;
-    char* sub_fn_name = node->atom->name;
+    if (node->list->fst->type != NODE_ATOM) {
+      fprintf(stderr, "atom expected\n");
+      return 1;
+    }
+
+    char* sub_fn_name = node->list->fst->atom->name;
 
     // handle special statements first
     if (strcmp(sub_fn_name, "if") == 0) {
-      return eval_if(mod, table, node, builder, result);
+      return eval_if(mod, table, node->list, builder, result);
+    } else if (strcmp(sub_fn_name, "cond") == 0) {
+      return eval_switch(mod, table, node->list, builder, result);
     }
 
+    node = node->list->fst;
     LLVMValueRef* args = malloc(arity * sizeof(LLVMValueRef));
     symbol_t* sym_local;
     int eval_result;
@@ -253,7 +338,7 @@ int module_compile (module_t* mod) {
   for (int i = 0; i < len; i++) {
     sym = &mod->table.symbols[i];
     if (compile_fn(mod, sym) != 0) {
-      fprintf(stderr, "error compile funtion %s\n", sym->name);
+      fprintf(stderr, "error compile function %s\n", sym->name);
       return 1;
     }
   }
