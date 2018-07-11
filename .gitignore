@@ -1,4 +1,5 @@
 examples/*
+!examples/*.ll
 !examples/*.sith
 main
 main.dSYM
