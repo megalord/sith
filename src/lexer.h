@@ -1,6 +1,8 @@
 #ifndef	_LEXER_H
 #define	_LEXER_H
 
+#include <stdio.h>
+
 int INDENTATION;
 
 typedef struct {
