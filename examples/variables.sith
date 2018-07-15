@@ -1,0 +1,8 @@
+(include "c/stdio")
+
+(: main (-> I32))
+(defun (main)
+  (puts "hello")
+  (let ((name "world"))
+    (puts name)
+    0))

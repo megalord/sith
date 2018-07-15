@@ -70,6 +70,15 @@ int compile_if (module_t* mod, symbol_table_t* table, expr_t *expr, LLVMBuilderR
   return 0;
 }
 
+int compile_let (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilderRef builder, LLVMValueRef* result) {
+  for (val_t* val = expr->let_table->values; val < expr->let_table->values + expr->let_table->num_symbols; val++) {
+    if (compile_expr(mod, table, val->body, builder, &val->llvm) != 0) {
+      return 1;
+    }
+  }
+  return compile_expr(mod, expr->let_table, expr->let_body, builder, result);
+}
+
 int compile_switch (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilderRef builder, LLVMValueRef* result) {
   LLVMValueRef condition;
   LLVMValueRef fn = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
@@ -163,6 +172,8 @@ int compile_expr (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilde
       return compile_funcall(mod, table, expr, builder, result);
     case EXPR_IF:
       return compile_if(mod, table, expr, builder, result);
+    case EXPR_LET:
+      return compile_let(mod, table, expr, builder, result);
     case EXPR_PROGN:
       for (int i = 0; i < expr->num_exprs; i++) {
         if (compile_expr(mod, table, expr->exprs + i, builder, result) != 0) {

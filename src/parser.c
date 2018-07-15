@@ -94,6 +94,66 @@ int parse_if (symbol_table_t* table, list_t* list, expr_t* expr) {
   return 0;
 }
 
+int parse_let (symbol_table_t* parent, list_t* list, expr_t* expr) {
+  if (list->len < 3) {
+    fprintf(stderr, "invalid let syntax: not enough forms\n");
+    return 1;
+  }
+  node_t* node = list->fst->next;
+  if (node->type != NODE_LIST) {
+    fprintf(stderr, "invalid let syntax: var bindings must be a list\n");
+    return 1;
+  }
+
+  symbol_table_t* table = symbol_table_new(parent, node->list->len);
+  expr->let_table = table;
+
+  node_t* var_node = node->list->fst;
+  node_t* sub_node;
+  for (int i = 0; i < table->num_symbols; i++) {
+    if (var_node->type != NODE_LIST) {
+      fprintf(stderr, "invalid let binding\n");
+      return 1;
+    }
+
+    sub_node = var_node->list->fst;
+    if (sub_node->type != NODE_ATOM) {
+      fprintf(stderr, "invalid let variable name\n");
+      return 1;
+    }
+
+    table->names[i] = sub_node->atom->name;
+    sub_node = sub_node->next;
+
+    // TODO: allow expressions
+    if (sub_node->type != NODE_ATOM) {
+      fprintf(stderr, "let variable values must be constants\n");
+      return 1;
+    }
+
+    table->values[i].body = malloc(sizeof(expr_t));
+    if (parse_expr(parent, sub_node, table->values[i].body) != 0) {
+      return 1;
+    }
+
+    var_node = var_node->next;
+  }
+
+  expr->let_body = malloc(sizeof(expr_t));
+  if (list->len == 3) {
+    if (parse_expr(table, node->next, expr->let_body) != 0) {
+      return 1;
+    }
+  } else {
+    expr->let_body->type = EXPR_PROGN;
+    expr->let_body->num_exprs = list->len - 2;
+    if (parse_progn(table, node->next, expr->let_body) != 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 int parse_switch (symbol_table_t* table, list_t* list, expr_t* expr) {
   node_t* node = list->fst->next;
   if (parse_expr(table, node, expr->case_cond) != 0) {
@@ -147,6 +207,7 @@ int parse_switch (symbol_table_t* table, list_t* list, expr_t* expr) {
 }
 
 int parse_progn (symbol_table_t* table, node_t* node, expr_t* expr) {
+  expr->exprs = malloc(sizeof(expr_t) * expr->num_exprs);
   expr_t* curr;
   for (curr = expr->exprs; curr < expr->exprs + expr->num_exprs; curr++) {
     if (parse_expr(table, node, curr) != 0) {
@@ -194,10 +255,12 @@ int parse_expr (symbol_table_t* table, node_t* node, expr_t* expr) {
         expr->if_ = exprs + 1;
         expr->else_ = exprs + 2;
         return parse_if(table, node->list, expr);
+      } else if (strcmp(name, "let") == 0) {
+        expr->type = EXPR_LET;
+        return parse_let(table, node->list, expr);
       } else if (strcmp(name, "progn") == 0) {
         expr->type = EXPR_PROGN;
         expr->num_exprs = node->list->len - 1;
-        expr->exprs = malloc(sizeof(expr_t) * expr->num_exprs);
         return parse_progn(table, node->list->fst->next, expr);
       } else if (strcmp(name, "cond") == 0) {
         expr->type = EXPR_SWITCH;
@@ -248,12 +311,21 @@ int parse_defun (symbol_table_t* table, node_t* node) {
     param_node = param_node->next;
   }
   expr_t* progn = malloc(sizeof(expr_t));
+  val->body = progn;
   progn->type = EXPR_PROGN;
   progn->num_exprs = node->list->len - 2;
-  progn->exprs = malloc(sizeof(expr_t) * progn->num_exprs);
-  val->body = progn;
   parse_progn(table, sig_node->next, progn);
   return 0;
+}
+
+symbol_table_t* symbol_table_new (symbol_table_t* parent, int len) {
+  symbol_table_t* table = malloc(sizeof(symbol_table_t));
+  table->parent = parent;
+  table->num_symbols = len;
+  table->max_symbols = len;
+  table->names = malloc(sizeof(char*) * len);
+  table->values = malloc(sizeof(val_t) * len);
+  return table;
 }
 
 val_t* symbol_table_get (symbol_table_t* table, char* name) {

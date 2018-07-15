@@ -15,6 +15,7 @@ typedef enum {
   EXPR_CONST,
   EXPR_FUNCALL,
   EXPR_IF,
+  EXPR_LET,
   EXPR_PROGN,
   EXPR_SWITCH,
   EXPR_VAR
@@ -29,6 +30,8 @@ typedef struct expr_t {
     struct { char* fn_name; int num_params; struct expr_t* params; };
     // EXPR_IF
     struct { struct expr_t *if_cond, *if_, *else_; };
+    // EXPR_LET
+    struct { struct symbol_table_t* let_table; struct expr_t* let_body; };
     // EXPR_PROGN
     struct { int num_exprs; struct expr_t* exprs; };
     // EXPR_SWITCH
@@ -59,7 +62,7 @@ typedef struct val_t {
   union {
     // type.meta == TYPE_PRIM
     struct { void* data; }; // use type.name, should be either string or int
-    // type.meta == TYPE_FUNC
+    // type.meta == TYPE_FUNC or let binding
     struct { struct expr_t* body; };
     // otherwise
     struct { int num_fields; struct val_t* fields; };
@@ -95,11 +98,13 @@ typedef struct symbol_table_t {
 
 int parse_type (node_t* node, type_t* type);
 int parse_if (symbol_table_t* table, list_t* list, expr_t* expr);
+int parse_let (symbol_table_t* parent, list_t* list, expr_t* expr);
 int parse_switch (symbol_table_t* table, list_t* list, expr_t* expr);
 int parse_progn (symbol_table_t* table, node_t* node, expr_t* expr);
 int parse_funcall (symbol_table_t* table, list_t* list, expr_t* expr);
 int parse_expr (symbol_table_t* table, node_t* node, expr_t* expr);
 int parse_defun (symbol_table_t* table, node_t* node);
+symbol_table_t* symbol_table_new (symbol_table_t* parent, int len);
 val_t* symbol_table_get (symbol_table_t* table, char* name);
 val_t* symbol_table_add (symbol_table_t* table, char* name, val_t* val);
 

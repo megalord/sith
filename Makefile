@@ -26,3 +26,7 @@ conditional: main
 switch: main
 	./main build examples/switch.sith
 	./examples/switch
+
+variables: main
+	./main build examples/variables.sith
+	./examples/variables
