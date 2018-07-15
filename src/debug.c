@@ -77,7 +77,7 @@ void module_print (module_t* module) {
   printf("MODULE %s\n", module->name);
   printf("requires:\n");
   for (int i = 0; i < module->num_deps; i = i + 1) {
-    printf(" - %s\n", module->deps[i].name);
+    printf(" - %s\n", module->deps[i]->name);
   }
   printf("defines symbols:\n");
   for (int i = 0; i < module->table.num_symbols; i = i + 1) {
@@ -86,6 +86,6 @@ void module_print (module_t* module) {
     printf("\n");
   }
   for (int i = 0; i < module->num_deps; i = i + 1) {
-    module_print(&module->deps[i]);
+    module_print(module->deps[i]);
   }
 }

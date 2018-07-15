@@ -218,6 +218,7 @@ int node_from_file (char* filename, node_t* root) {
   FILE* f = fopen(filename, "r");
   if (f == NULL) {
     perror("Error reading file");
+    fprintf(stderr, "%s\n", filename);
     return 1;
   }
 

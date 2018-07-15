@@ -1,4 +1,4 @@
-(include "/usr/local/lib/sith/c/stdio.ll")
+(include "c/stdio")
 
 (: main (-> I32))
 (defun (main)

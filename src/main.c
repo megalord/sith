@@ -22,19 +22,24 @@ int main (int argc, char** argv) {
     return 1;
   }
   char* filename = argv[2];
-  module_t module;
-  if (parse_filename(filename, &module.name) != 0) {
+  char* mod_name;
+  if (parse_filename(filename, &mod_name) != 0) {
     return 1;
   }
 
-  node_t root;
-  node_from_file(filename, &root);
   if (strcmp(argv[1], "read") == 0) {
+    node_t root;
+    node_from_file(filename, &root);
     node_print(&root, 0);
     return 0;
   }
 
-  if (module_parse(&root, &module) != 0) {
+  if (module_cache_init() != 0) {
+    return 1;
+  }
+
+  module_t module = { .name = mod_name };
+  if (module_parse_file(filename, &module) != 0) {
     return 1;
   }
 

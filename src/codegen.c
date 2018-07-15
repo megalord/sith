@@ -217,6 +217,11 @@ int compile_fn (module_t* mod, val_t* val, char* name) {
   LLVMTypeRef fn_type = LLVMFunctionType(ret_type, param_types, type.num_fields - 1, 0);
   val->llvm = LLVMAddFunction(mod->llvm, name, fn_type);
 
+  // ffi declaration
+  if (val->body == NULL) {
+    return 0;
+  }
+
   symbol_table_t* table = malloc(sizeof(symbol_table_t));
   table->num_symbols = type.num_fields - 1;
   table->max_symbols = table->num_symbols;
@@ -245,60 +250,10 @@ int compile_fn (module_t* mod, val_t* val, char* name) {
   return 0;
 }
 
-int parse_ir (module_t* mod) {
-  LLVMMemoryBufferRef buf;
-  char* msg = NULL;
-
-  if (LLVMCreateMemoryBufferWithContentsOfFile(mod->name, &buf, &msg)) {
-    fprintf(stderr, "Error reading file: %s\n", msg);
-    return 1;
-  }
-
-  mod->llvm = LLVMModuleCreateWithName(mod->name);
-  if (LLVMParseIRInContext(LLVMGetGlobalContext(), buf, &mod->llvm, &msg) != 0) {
-    fprintf(stderr, "error parsing IR: %s\n", msg);
-    return 1;
-  }
-
-  mod->table.parent = NULL;
-  mod->table.num_symbols = 1;
-  mod->table.names = malloc(sizeof(char*));
-  mod->table.values = malloc(sizeof(val_t));
-  mod->table.names[0] = malloc(5);
-  strncpy(mod->table.names[0], "puts", 5);
-  mod->table.values[0].type = malloc(sizeof(type_t));
-  mod->table.values[0].type->name = NULL;
-  mod->table.values[0].type->meta = TYPE_FUNC;
-  mod->table.values[0].type->num_fields = 2;
-  mod->table.values[0].type->fields = malloc(sizeof(type_t) * 2);
-  mod->table.values[0].type->fields[0] = (type_t) { .meta = TYPE_PARAM, .num_fields = 1 };
-  mod->table.values[0].type->fields[0].name = malloc(4);
-  strncpy(mod->table.values[0].type->fields[0].name, "Ptr", 4);
-  mod->table.values[0].type->fields[1] = (type_t) { .meta = TYPE_PRIM, .num_fields = 0 };
-  mod->table.values[0].type->fields[1].name = malloc(4);
-  strncpy(mod->table.values[0].type->fields[1].name, "I32", 4);
-  mod->table.values[0].type->fields[0].fields = malloc(sizeof(type_t));
-  mod->table.values[0].type->fields[0].fields[0] = (type_t) { .meta = TYPE_PRIM, .num_fields = 0 };
-  mod->table.values[0].type->fields[0].fields[0].name = malloc(3);
-  strncpy(mod->table.values[0].type->fields[0].fields[0].name, "I8", 4);
-
-  mod->table.values[0].llvm = LLVMGetNamedFunction(mod->llvm, "puts");
-
-  //LLVMDisposeMemoryBuffer(buf);
-  //LLVMDumpModule(mod->llvm);
-  return 0;
-}
-
 int module_compile (module_t* mod) {
   for (int i = 0; i < mod->num_deps; i++) {
-    if (str_includes(mod->deps[i].name, ".ll")) {
-      if (parse_ir(mod->deps + i) != 0) {
-        return 1;
-      }
-    } else {
-      if (module_compile(mod->deps + i) != 0) {
-        return 1;
-      }
+    if (module_compile(mod->deps[i]) != 0) {
+      return 1;
     }
   }
   mod->llvm = LLVMModuleCreateWithName(mod->name);
