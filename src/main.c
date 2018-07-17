@@ -4,7 +4,7 @@
 #include "codegen.h"
 #include "debug.h"
 #include "lexer.h"
-#include "module.h"
+#include "parser.h"
 #include "utils.h"
 #include "version.h"
 

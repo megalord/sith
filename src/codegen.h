@@ -3,7 +3,7 @@
 
 #include <llvm-c/Core.h>
 
-#include "module.h"
+#include "parser.h"
 
 int compile_const_val (val_t* val, LLVMBuilderRef builder, LLVMValueRef* result);
 int compile_if (module_t* mod, symbol_table_t* table, expr_t *expr, LLVMBuilderRef builder, LLVMValueRef* result);

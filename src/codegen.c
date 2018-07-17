@@ -10,7 +10,6 @@
 #include <llvm-c/Target.h>
 
 #include "codegen.h"
-#include "module.h"
 #include "parser.h"
 #include "utils.h"
 
@@ -19,15 +18,30 @@ typedef void* (*fn_one_arg_t) (void*);
 typedef void* (*fn_two_arg_t) (void*, void*);
 typedef void* (*fn_three_arg_t) (void*, void*, void*);
 
-int compile_const_val (val_t* val, LLVMBuilderRef builder, LLVMValueRef* result) {
-  if (val->type->meta != TYPE_PRIM) {
-    fprintf(stderr, "cannot compile non-primitive constants\n");
-    return 1;
+LLVMTypeRef type_to_llvm (type_t* type) {
+  if (strcmp(type->name, "I8") == 0) {
+    return LLVMInt8Type();
+  } else if (strcmp(type->name, "I32") == 0) {
+    return LLVMInt32Type();
+  } else if (strcmp(type->name, "Ptr") == 0) {
+    if (type->num_fields != 1) {
+      fprintf(stderr, "Ptr type must have 1 field, got %d\n", type->num_fields);
+      return NULL;
+    }
+    return LLVMPointerType(type_to_llvm(type->fields), 0);
+  } else {
+    fprintf(stderr, "cannot convert type %s\n", type->name);
+    return NULL;
   }
+}
 
-  if (strcmp(val->type->name, "I32") == 0) {
+int compile_const_val (val_t* val, LLVMBuilderRef builder, LLVMValueRef* result) {
+  if (val->type->meta == TYPE_PRIM && strcmp(val->type->name, "I32") == 0) {
     *result = LLVMConstInt(LLVMInt32Type(), *(int*)val->data, 0);
-  } else if (strcmp(val->type->name, "Str") == 0) {
+  } else if (val->type->meta == TYPE_PARAM &&
+             strcmp(val->type->name, "Ptr") == 0 &&
+             val->type->num_fields == 1 &&
+             strcmp(val->type->fields[0].name, "I8") == 0) {
     *result = LLVMBuildGlobalStringPtr(builder, (char*)val->data, "str");
   } else {
     fprintf(stderr, "cannot compile constant of type %s\n", val->type->name);
@@ -71,6 +85,22 @@ int compile_if (module_t* mod, symbol_table_t* table, expr_t *expr, LLVMBuilderR
 }
 
 int compile_let (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilderRef builder, LLVMValueRef* result) {
+  //LLVMValueRef LLVMBuildAlloca(LLVMBuilderRef, LLVMTypeRef Ty, const char *Name);
+  //LLVMValueRef LLVMBuildArrayAlloca(LLVMBuilderRef, LLVMTypeRef Ty,
+  //                                  LLVMValueRef Val, const char *Name);
+  //LLVMValueRef LLVMBuildStore(LLVMBuilderRef, LLVMValueRef Val, LLVMValueRef Ptr);
+
+  //val_t* val;
+  ////LLVMValueRef* ptrs = malloc(sizeof(LLVMValueRef) * expr->let_table->num_symbols);
+  //LLVMValueRef val_result;
+  //for (int i = 0; i < expr->let_table->num_symbols; i++) {
+  //  val = expr->let_table->values + i;
+  //  val->llvm = LLVMBuildAlloca(builder, type_to_llvm(val->type), expr->let_table->names[i]);
+  //  if (compile_expr(mod, table, val->body, builder, &val_result) != 0) {
+  //    return 1;
+  //  }
+  //  LLVMBuildStore(builder, val_result, val->llvm);
+  //}
   for (val_t* val = expr->let_table->values; val < expr->let_table->values + expr->let_table->num_symbols; val++) {
     if (compile_expr(mod, table, val->body, builder, &val->llvm) != 0) {
       return 1;
@@ -142,30 +172,12 @@ int compile_funcall (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBui
     return 0;
   }
 
-  val_t* val = symbol_table_get(table, expr->fn_name);
-  if (val == NULL) {
-    val = module_deps_symbol_find(mod, expr->fn_name);
-    if (val != NULL) {
-      val = symbol_table_add(&mod->table, expr->fn_name, val);
-      val->llvm = LLVMAddFunction(mod->llvm, expr->fn_name, LLVMGetElementType(LLVMTypeOf(val->llvm)));
-    }
-  }
-  if (val == NULL) {
-    fprintf(stderr, "symbol \"%s\" not found\n", expr->fn_name);
-    return 1;
-  }
-  if (val->type->meta != TYPE_FUNC) {
-    fprintf(stderr, "symbol \"%s\" is not a function\n", expr->fn_name);
-    return 1;
-  }
-
-  *result = LLVMBuildCall(builder, val->llvm, args, expr->num_params, expr->fn_name);
+  *result = LLVMBuildCall(builder, LLVMGetNamedFunction(mod->llvm, expr->fn_name), args, expr->num_params, expr->fn_name);
   return 0;
 }
 
 int compile_expr (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilderRef builder, LLVMValueRef* result) {
-  val_t* val;
-  switch (expr->type) {
+  switch (expr->form) {
     case EXPR_CONST:
       return compile_const_val(expr->cnst, builder, result);
     case EXPR_FUNCALL:
@@ -184,30 +196,8 @@ int compile_expr (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilde
     case EXPR_SWITCH:
       return compile_switch(mod, table, expr, builder, result);
     case EXPR_VAR:
-      val = symbol_table_get(table, expr->var_name);
-      if (val == NULL) {
-        fprintf(stderr, "symbol \"%s\" not found\n", expr->var_name);
-        return 1;
-      }
-      *result = val->llvm;
+      *result = expr->var->llvm;
       return 0;
-  }
-}
-
-LLVMTypeRef type_to_llvm (type_t* type) {
-  if (strcmp(type->name, "I8") == 0) {
-    return LLVMInt8Type();
-  } else if (strcmp(type->name, "I32") == 0) {
-    return LLVMInt32Type();
-  } else if (strcmp(type->name, "Ptr") == 0) {
-    if (type->num_fields != 1) {
-      fprintf(stderr, "Ptr type must have 1 field, got %d\n", type->num_fields);
-      return NULL;
-    }
-    return LLVMPointerType(type_to_llvm(type->fields), 0);
-  } else {
-    fprintf(stderr, "cannot convert type %s\n", type->name);
-    return NULL;
   }
 }
 
@@ -262,12 +252,17 @@ int compile_fn (module_t* mod, val_t* val, char* name) {
 }
 
 int module_compile (module_t* mod) {
+  symbol_table_t dep_table;
+  mod->llvm = LLVMModuleCreateWithName(mod->name);
   for (int i = 0; i < mod->num_deps; i++) {
     if (module_compile(mod->deps[i]) != 0) {
       return 1;
     }
+    dep_table = mod->deps[i]->table;
+    for (int j = 0; j < dep_table.num_symbols; j++) {
+      LLVMAddFunction(mod->llvm, dep_table.names[j], LLVMGetElementType(LLVMTypeOf(dep_table.values[j].llvm)));
+    }
   }
-  mod->llvm = LLVMModuleCreateWithName(mod->name);
   val_t* val;
   int len = mod->table.num_symbols;
   for (int i = 0; i < len; i++) {

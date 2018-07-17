@@ -2,7 +2,6 @@
 #define	_DEBUG_H
 
 #include "lexer.h"
-#include "module.h"
 #include "parser.h"
 
 const char* atom_print_type (atom_type_t type);
