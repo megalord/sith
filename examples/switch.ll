@@ -1,9 +1,7 @@
 ; ModuleID = 'examples/switch'
 source_filename = "examples/switch"
 
-@str = private unnamed_addr constant [5 x i8] c"even\00"
-@str.1 = private unnamed_addr constant [4 x i8] c"odd\00"
-@str.2 = private unnamed_addr constant [6 x i8] c"seven\00"
+declare i32 @puts(i8*)
 
 define i32 @main() {
 entry:
@@ -25,16 +23,23 @@ switch_cont:                                      ; preds = %case_2, %case_1, %c
   ret i32 0
 
 case_0:                                           ; preds = %entry, %entry, %entry
-  %puts = call i32 @puts(i8* getelementptr inbounds ([5 x i8], [5 x i8]* @str, i32 0, i32 0))
+  %0 = alloca [5 x i8], i8 1
+  store [5 x i8] c"even\00", [5 x i8]* %0
+  %1 = bitcast [5 x i8]* %0 to i8*
+  %puts = call i32 @puts(i8* %1)
   br label %switch_cont
 
 case_1:                                           ; preds = %entry, %entry, %entry
-  %puts1 = call i32 @puts(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @str.1, i32 0, i32 0))
+  %2 = alloca [4 x i8], i8 1
+  store [4 x i8] c"odd\00", [4 x i8]* %2
+  %3 = bitcast [4 x i8]* %2 to i8*
+  %puts1 = call i32 @puts(i8* %3)
   br label %switch_cont
 
 case_2:                                           ; preds = %entry
-  %puts2 = call i32 @puts(i8* getelementptr inbounds ([6 x i8], [6 x i8]* @str.2, i32 0, i32 0))
+  %4 = alloca [6 x i8], i8 1
+  store [6 x i8] c"seven\00", [6 x i8]* %4
+  %5 = bitcast [6 x i8]* %4 to i8*
+  %puts2 = call i32 @puts(i8* %5)
   br label %switch_cont
 }
-
-declare i32 @puts(i8*)

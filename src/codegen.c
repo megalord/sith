@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,7 +43,13 @@ int compile_const_val (val_t* val, LLVMBuilderRef builder, LLVMValueRef* result)
              strcmp(val->type->name, "Ptr") == 0 &&
              val->type->num_fields == 1 &&
              strcmp(val->type->fields[0].name, "I8") == 0) {
-    *result = LLVMBuildGlobalStringPtr(builder, (char*)val->data, "str");
+    int len = strlen((char*)val->data);
+    LLVMValueRef int_list = LLVMBuildArrayAlloca(builder,
+        LLVMArrayType(LLVMInt8Type(), len + 1),
+        LLVMConstInt(LLVMInt8Type(), 1, false),
+        "");
+    LLVMBuildStore(builder, LLVMConstString((char*)val->data, len, false), int_list);
+    *result = LLVMBuildBitCast(builder, int_list, LLVMPointerType(LLVMInt8Type(), 0), "");
   } else {
     fprintf(stderr, "cannot compile constant of type %s\n", val->type->name);
     return 1;
@@ -223,17 +230,8 @@ int compile_fn (module_t* mod, val_t* val, char* name) {
     return 0;
   }
 
-  symbol_table_t* table = malloc(sizeof(symbol_table_t));
-  table->num_symbols = type.num_fields - 1;
-  table->max_symbols = table->num_symbols;
-  table->parent = &mod->table;
-
-  table->names = malloc(table->num_symbols * sizeof(char*));
-  table->values = malloc(table->num_symbols * sizeof(val_t));
   for (i = 0; i < type.num_fields - 1; i++) {
-    table->names[i] = type.field_names[i];
-    table->values[i].type = type.fields + i;
-    table->values[i].llvm = LLVMGetParam(val->llvm, i);
+    val->body->let_table->values[i].llvm = LLVMGetParam(val->llvm, i);
   }
 
   LLVMBasicBlockRef entry = LLVMAppendBasicBlock(val->llvm, "entry");
@@ -243,7 +241,7 @@ int compile_fn (module_t* mod, val_t* val, char* name) {
 
   LLVMValueRef result;
 
-  if (compile_expr(mod, table, val->body, builder, &result) != 0) {
+  if (compile_expr(mod, val->body->let_table, val->body->let_body, builder, &result) != 0) {
     return 1;
   }
 

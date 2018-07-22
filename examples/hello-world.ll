@@ -1,20 +1,23 @@
 ; ModuleID = 'examples/hello-world'
 source_filename = "examples/hello-world"
 
-@str = private unnamed_addr constant [6 x i8] c"hello\00"
-@str.1 = private unnamed_addr constant [6 x i8] c"world\00"
+declare i32 @puts(i8*)
 
 define i32 @hello(i8*) {
 entry:
-  %puts = call i32 @puts(i8* getelementptr inbounds ([6 x i8], [6 x i8]* @str, i32 0, i32 0))
+  %1 = alloca [6 x i8], i8 1
+  store [6 x i8] c"hello\00", [6 x i8]* %1
+  %2 = bitcast [6 x i8]* %1 to i8*
+  %puts = call i32 @puts(i8* %2)
   %puts1 = call i32 @puts(i8* %0)
   ret i32 %puts1
 }
 
-declare i32 @puts(i8*)
-
 define i32 @main() {
 entry:
-  %hello = call i32 @hello(i8* getelementptr inbounds ([6 x i8], [6 x i8]* @str.1, i32 0, i32 0))
+  %0 = alloca [6 x i8], i8 1
+  store [6 x i8] c"world\00", [6 x i8]* %0
+  %1 = bitcast [6 x i8]* %0 to i8*
+  %hello = call i32 @hello(i8* %1)
   ret i32 0
 }

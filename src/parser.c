@@ -236,7 +236,7 @@ int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t
     expr->fn = module_deps_symbol_find(module, expr->fn_name);
   }
   if (expr->fn == NULL) {
-    fprintf(stderr, "symbol %s not found\n", expr->fn_name);
+    fprintf(stderr, "symbol %s not found (%d:%d)\n", expr->fn_name, list->fst->atom->line, list->fst->atom->pos);
     return 1;
   }
   if (expr->fn->type->meta != TYPE_FUNC) {
@@ -341,21 +341,35 @@ int parse_defun (module_t* module, symbol_table_t* table, node_t* node) {
     fprintf(stderr, "%s definition does not match type signature\n", fn_name);
     return 1;
   }
-  type->field_names = malloc((type->num_fields - 1) * sizeof(char*));
+
+  expr_t* expr = malloc(sizeof(expr_t));
+  expr->form = EXPR_LET;
+  expr->let_body = malloc(sizeof(expr_t));
+  expr->let_table = symbol_table_new(table, type->num_fields - 1);
+  val->body = expr;
+
   node_t* param_node = sig_node->list->fst->next; // skip function name
-  for (int j = 0; j < type->num_fields - 1; j++) {
+  for (int i = 0; i < type->num_fields - 1; i++) {
     if (param_node->type != NODE_ATOM || param_node->atom->type != ATOM_IDENTIFIER) {
       fprintf(stderr, "Function parameter arguments must be atoms");
       return 1;
     }
-    type->field_names[j] = param_node->atom->name;
+    expr->let_table->names[i] = param_node->atom->name;
+    expr->let_table->values[i].type = type->fields + i;
     param_node = param_node->next;
   }
-  expr_t* progn = malloc(sizeof(expr_t));
-  val->body = progn;
-  progn->form = EXPR_PROGN;
-  progn->num_exprs = node->list->len - 2;
-  parse_progn(module, table, sig_node->next, progn);
+
+  if (node->list->len == 3) {
+    if (parse_expr(module, expr->let_table, sig_node->next, expr->let_body) != 0) {
+      return 1;
+    }
+  } else {
+    expr->let_body->form = EXPR_PROGN;
+    expr->let_body->num_exprs = node->list->len - 2;
+    if (parse_progn(module, expr->let_table, sig_node->next, expr->let_body) != 0) {
+      return 1;
+    }
+  }
   return 0;
 }
 
@@ -485,13 +499,14 @@ int module_parse_node (node_t* root, module_t* module) {
   val_t* sym = module->table.values;
   int i_sym = 0;
   int i_type = 0;
+  char* name;
   for (int i = 0; i < root->list->len; i++) {
     if (node->type != NODE_LIST) {
       fprintf(stderr, "sub-root node must be a list\n");
       return 1;
     }
     if (node->list->fst->type == NODE_ATOM) {
-      char* name = node->list->fst->atom->name;
+      name = node->list->fst->atom->name;
       if (strcmp(name, "include") == 0) {
         *dep = module_load(node->list->fst->next->atom->name);
         if (*dep == NULL) {
@@ -521,7 +536,16 @@ int module_parse_node (node_t* root, module_t* module) {
         }
         sym++;
         i_sym++;
-      } else if (strcmp(name, "defun") == 0) {
+      }
+    }
+    node = node->next;
+  }
+
+  node = root->list->fst;
+  for (int i = 0; i < root->list->len; i++) {
+    if (node->list->fst->type == NODE_ATOM) {
+      name = node->list->fst->atom->name;
+      if (strcmp(name, "defun") == 0) {
         if (parse_defun(module, &module->table, node) != 0) {
           return 1;
         }
@@ -529,6 +553,7 @@ int module_parse_node (node_t* root, module_t* module) {
     }
     node = node->next;
   }
+
   return 0;
 }
 
