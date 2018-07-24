@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,6 +6,10 @@
 
 #include "lexer.h"
 #include "parser.h"
+
+#define NUM_EXPRS 9192
+static expr_t exprs[NUM_EXPRS];
+static int i_expr = 0;
 
 type_t TYPE_I8 = { .name = (char*)"I8", .meta = TYPE_PRIM, .num_fields = 0 };
 type_t TYPE_I32 = { .name = (char*)"I32", .meta = TYPE_PRIM, .num_fields = 0 };
@@ -14,6 +19,18 @@ char cwd[1024];
 const char* stdlib = "/usr/local/lib/sith/";
 module_cache_t cache = { .len = 0, .max = 0, .modules = NULL };
 
+
+expr_t* expr_new () {
+  assert(i_expr < NUM_EXPRS);
+  return exprs + i_expr++;
+}
+
+expr_t* expr_new_i (int i) {
+  assert(i_expr + i - 1 < NUM_EXPRS);
+  expr_t* start = exprs + i_expr;
+  i_expr += i;
+  return start;
+}
 
 int parse_type (node_t* node, type_t* type) {
   switch (node->type) {
@@ -139,7 +156,7 @@ int parse_let (module_t* module, symbol_table_t* parent, list_t* list, expr_t* e
       return 1;
     }
 
-    var_expr = malloc(sizeof(expr_t));
+    var_expr = expr_new();
     if (parse_expr(module, parent, sub_node, var_expr) != 0) {
       return 1;
     }
@@ -149,7 +166,7 @@ int parse_let (module_t* module, symbol_table_t* parent, list_t* list, expr_t* e
     var_node = var_node->next;
   }
 
-  expr->let_body = malloc(sizeof(expr_t));
+  expr->let_body = expr_new();
   if (list->len == 3) {
     if (parse_expr(module, table, node->next, expr->let_body) != 0) {
       return 1;
@@ -217,7 +234,7 @@ int parse_switch (module_t* module, symbol_table_t* table, list_t* list, expr_t*
 }
 
 int parse_progn (module_t* module, symbol_table_t* table, node_t* node, expr_t* expr) {
-  expr->exprs = malloc(sizeof(expr_t) * expr->num_exprs);
+  expr->exprs = expr_new_i(expr->num_exprs);
   expr_t* curr;
   for (curr = expr->exprs; curr < expr->exprs + expr->num_exprs; curr++) {
     if (parse_expr(module, table, node, curr) != 0) {
@@ -250,7 +267,7 @@ int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t
     return 1;
   }
 
-  expr->params = malloc(sizeof(expr_t) * expr->num_params);
+  expr->params = expr_new_i(expr->num_params);
 
   expr_t* curr;
   node_t* node = list->fst->next;
@@ -294,7 +311,7 @@ int parse_expr (module_t* module, symbol_table_t* table, node_t* node, expr_t* e
       char* name = node->list->fst->atom->name;
       if (strcmp(name, "if") == 0) {
         expr->form = EXPR_IF;
-        expr_t* exprs = malloc(sizeof(expr_t) * 3);
+        expr_t* exprs = expr_new_i(3);
         expr->if_cond = exprs;
         expr->if_ = exprs + 1;
         expr->else_ = exprs + 2;
@@ -308,9 +325,9 @@ int parse_expr (module_t* module, symbol_table_t* table, node_t* node, expr_t* e
         return parse_progn(module, table, node->list->fst->next, expr);
       } else if (strcmp(name, "cond") == 0) {
         expr->form = EXPR_SWITCH;
-        expr->case_cond = malloc(sizeof(expr_t));
+        expr->case_cond = expr_new();
         expr->num_cases = node->list->len - 2;
-        expr->case_bodies = malloc(sizeof(expr_t) * expr->num_cases);
+        expr->case_bodies = expr_new_i(expr->num_cases);
         expr->case_vals = malloc(sizeof(val_list_t) * expr->num_cases);
         return parse_switch(module, table, node->list, expr);
       } else {
@@ -342,9 +359,9 @@ int parse_defun (module_t* module, symbol_table_t* table, node_t* node) {
     return 1;
   }
 
-  expr_t* expr = malloc(sizeof(expr_t));
+  expr_t* expr = expr_new();
   expr->form = EXPR_LET;
-  expr->let_body = malloc(sizeof(expr_t));
+  expr->let_body = expr_new();
   expr->let_table = symbol_table_new(table, type->num_fields - 1);
   val->body = expr;
 

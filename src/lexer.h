@@ -42,8 +42,10 @@ typedef enum {
 
 typedef struct node_t {
   node_type_t type;
-  atom_t *atom;
-  list_t *list;
+  union {
+    atom_t* atom;
+    list_t* list;
+  };
   struct node_t *next;
 } node_t;
 

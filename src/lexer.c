@@ -1,13 +1,42 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "lexer.h"
 
-int INDENTATION = 2;
+#define INDENTATION 2
 
-unsigned int line = 1;
-unsigned int pos = 1;
+#define NUM_NODES 4096
+static node_t nodes[NUM_NODES];
+static int i_node = 0;
+
+#define NUM_ATOMS 4096
+static atom_t atoms[NUM_ATOMS];
+static int i_atom = 0;
+
+#define NUM_LISTS 4096
+static list_t lists[NUM_LISTS];
+static int i_list = 0;
+
+static unsigned int line = 1;
+static unsigned int pos = 1;
+
+
+node_t* node_new () {
+  assert(i_node < NUM_NODES);
+  return nodes + i_node++;
+}
+
+atom_t* atom_new () {
+  assert(i_atom < NUM_ATOMS);
+  return atoms + i_atom++;
+}
+
+list_t* list_new () {
+  assert(i_list < NUM_LISTS);
+  return lists + i_list++;
+}
 
 buffer_t buf_create (int size) {
   buffer_t buf;
@@ -15,7 +44,7 @@ buffer_t buf_create (int size) {
   buf.size = size;
   buf.data = malloc(buf.size * sizeof(char));
   buf.data[0] = '\0';
-  return  buf;
+  return buf;
 }
 
 void buf_grow (buffer_t* buf) {
@@ -78,7 +107,7 @@ void read_until (stream_t* stream, buffer_t* buf, int d) {
   while (1) {
     int c = stream_peek(stream);
     if (c == EOF || c == d) {
-      break;;
+      break;
     }
     if (c == '\\') {
       buf_write_char(buf, (char)stream_read(stream));
@@ -139,7 +168,7 @@ int read_atom (stream_t* stream, atom_t* atom) {
       while (1) {
         int d = stream_peek(stream);
         if (d == ' ' || d == '\n' || d == ')') {
-          break;;
+          break;
         }
         buf_write_char(&str, (char)stream_read(stream));
       }
@@ -161,12 +190,12 @@ int read_list (stream_t* stream, list_t* list) {
     c = stream_peek(stream);
     if (c == EOF || c == -2 || c == ')') {
       stream_read(stream);
-      break;;
+      break;
     } else {
       if (c == ' ') {
         stream_read(stream);
       } else {
-        node = malloc(sizeof(node_t));
+        node = node_new();
         node->next = NULL;
         if (read_node(stream, node) != 0) {
           return 1;
@@ -195,14 +224,12 @@ int read_node (stream_t* stream, node_t* node) {
       return read_node(stream, node);
     case '(':
       node->type = NODE_LIST;
-      node->atom = NULL;
-      node->list = malloc(sizeof(list_t));
+      node->list = list_new();
       node->list->len = 0;
       return read_list(stream, node->list);
     default:
       node->type = NODE_ATOM;
-      node->list = NULL;
-      node->atom = malloc(sizeof(atom_t));
+      node->atom = atom_new();
       return read_atom(stream, node->atom);
   }
   return 0;
@@ -211,8 +238,7 @@ int read_node (stream_t* stream, node_t* node) {
 int node_from_file (char* filename, node_t* root) {
   root->next = NULL;
   root->type = NODE_LIST;
-  root->list = malloc(sizeof(list_t));
-  root->atom = NULL;
+  root->list = list_new();
   root->list->len = 0;
   root->list->fst = NULL;
   FILE* f = fopen(filename, "r");
@@ -231,11 +257,10 @@ int node_from_file (char* filename, node_t* root) {
   node_t* node;
   node_t* prev = NULL;
   while (1) {
-    node = malloc(sizeof(node_t));
+    node = node_new();
     node->next = NULL;
     if (read_node(&stream, node) != 0) {
-      free(node);
-      break;;
+      break;
     }
     if (prev == NULL) {
       root->list->fst = node;
