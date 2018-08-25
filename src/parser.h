@@ -43,6 +43,7 @@ typedef struct expr_t {
 } expr_t;
 
 typedef enum {
+  TYPE_ALIAS,
   TYPE_PRIM,
   TYPE_FUNC,
   TYPE_PARAM,
@@ -54,7 +55,7 @@ typedef struct type_t {
   char* name;
   meta_type_t meta;
   int num_fields;
-  struct type_t* fields;
+  struct type_t** fields;
   char** field_names; // for sum or product types
 } type_t;
 
@@ -113,7 +114,12 @@ typedef struct {
   module_t* modules;
 } module_cache_t;
 
-int parse_type (node_t* node, type_t* type);
+type_t* TYPE_I8;
+type_t* TYPE_I32;
+type_t* TYPE_PTR;
+type_t* TYPE_CSTR;
+
+int parse_type (module_t* module, node_t* node, type_t* type);
 int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* val);
 int parse_if (module_t* module, symbol_table_t* table, list_t* list, expr_t* expr);
 int parse_let (module_t* module, symbol_table_t* parent, list_t* list, expr_t* expr);

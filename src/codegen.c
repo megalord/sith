@@ -11,6 +11,7 @@
 #include <llvm-c/Target.h>
 
 #include "codegen.h"
+#include "debug.h"
 #include "parser.h"
 #include "utils.h"
 
@@ -29,7 +30,7 @@ LLVMTypeRef type_to_llvm (type_t* type) {
       fprintf(stderr, "Ptr type must have 1 field, got %d\n", type->num_fields);
       return NULL;
     }
-    return LLVMPointerType(type_to_llvm(type->fields), 0);
+    return LLVMPointerType(type_to_llvm(type->fields[0]), 0);
   } else {
     fprintf(stderr, "cannot convert type %s\n", type->name);
     return NULL;
@@ -42,7 +43,7 @@ int compile_const_val (val_t* val, LLVMBuilderRef builder, LLVMValueRef* result)
   } else if (val->type->meta == TYPE_PARAM &&
              strcmp(val->type->name, "Ptr") == 0 &&
              val->type->num_fields == 1 &&
-             strcmp(val->type->fields[0].name, "I8") == 0) {
+             strcmp(val->type->fields[0]->name, "I8") == 0) {
     int len = strlen((char*)val->data);
     LLVMValueRef int_list = LLVMBuildArrayAlloca(builder,
         LLVMArrayType(LLVMInt8Type(), len + 1),
@@ -51,7 +52,8 @@ int compile_const_val (val_t* val, LLVMBuilderRef builder, LLVMValueRef* result)
     LLVMBuildStore(builder, LLVMConstString((char*)val->data, len, false), int_list);
     *result = LLVMBuildBitCast(builder, int_list, LLVMPointerType(LLVMInt8Type(), 0), "");
   } else {
-    fprintf(stderr, "cannot compile constant of type %s\n", val->type->name);
+    fprintf(stderr, "cannot compile constant of type ");
+    type_print(val->type);
     return 1;
   }
   return 0;
@@ -213,12 +215,12 @@ int compile_fn (module_t* mod, val_t* val, char* name) {
   int i;
   LLVMTypeRef* param_types = malloc((type.num_fields - 1) * sizeof(LLVMTypeRef));
   for (i = 0; i < type.num_fields - 1; i++) {
-    param_types[i] = type_to_llvm(type.fields + i);
+    param_types[i] = type_to_llvm(type.fields[i]);
     if (param_types[i] == NULL) {
       return 1;
     }
   }
-  LLVMTypeRef ret_type = type_to_llvm(type.fields + i);
+  LLVMTypeRef ret_type = type_to_llvm(type.fields[i]);
   if (ret_type == NULL) {
     return 1;
   }
@@ -266,7 +268,7 @@ int module_compile (module_t* mod) {
   for (int i = 0; i < len; i++) {
     val = mod->table.values + i;
     if (val->type->meta != TYPE_FUNC) {
-      fprintf(stderr, "error compile top level expressions %s\n", mod->table.names[i]);
+      fprintf(stderr, "error compile top level expression %s in module %s\n", mod->table.names[i], mod->name);
       return 1;
     }
     if (compile_fn(mod, val, mod->table.names[i]) != 0) {

@@ -11,14 +11,25 @@
 static expr_t exprs[NUM_EXPRS];
 static int i_expr = 0;
 
-type_t TYPE_I8 = { .name = (char*)"I8", .meta = TYPE_PRIM, .num_fields = 0 };
-type_t TYPE_I32 = { .name = (char*)"I32", .meta = TYPE_PRIM, .num_fields = 0 };
-type_t TYPE_CSTR = { .name = (char*)"Ptr", .meta = TYPE_PARAM, .num_fields = 1, .fields = &TYPE_I8 };
-
 char cwd[1024];
 const char* stdlib = "/usr/local/lib/sith/";
 module_cache_t cache = { .len = 0, .max = 0, .modules = NULL };
 
+type_t* type_new_i (int i);
+module_t MODULE_BUILTIN = {
+  .name = (char*)"builtin",
+  .num_deps = 0,
+  .deps = NULL,
+  .num_types = 0,
+  .types = NULL,
+  .table = {
+    .num_symbols = 0,
+    .max_symbols = 0,
+    .names = NULL,
+    .values = NULL
+  },
+  .llvm = NULL
+};
 
 expr_t* expr_new () {
   assert(i_expr < NUM_EXPRS);
@@ -32,50 +43,6 @@ expr_t* expr_new_i (int i) {
   return start;
 }
 
-int parse_type (node_t* node, type_t* type) {
-  switch (node->type) {
-    case NODE_ATOM:
-      type->name = node->atom->name;
-      type->meta = TYPE_PRIM;
-      type->num_fields = 0;
-      type->fields = NULL;
-      type->field_names = NULL;
-      return 0;
-    case NODE_LIST:
-      type->num_fields = node->list->len - 1;
-      node = node->list->fst;
-      if (node->type != NODE_ATOM) {
-        fprintf(stderr, "invalid signature\n");
-        return 1;
-      }
-      if (strcmp(node->atom->name, "->") == 0) {
-        type->meta = TYPE_FUNC;
-      } else if (strcmp(node->atom->name, "+") == 0) {
-        type->meta = TYPE_SUM;
-      } else if (strcmp(node->atom->name, "*") == 0) {
-        type->meta = TYPE_PRODUCT;
-      } else {
-        type->meta = TYPE_PARAM;
-        type->name = node->atom->name;
-      }
-      type->fields = malloc(type->num_fields * sizeof(type_t));
-      type->field_names = NULL;
-      type_t* field;
-      for (field = type->fields; field < type->fields + type->num_fields; field++) {
-        node = node->next;
-        field->name = NULL;
-        if (parse_type(node, field) != 0) {
-          return 1;
-        }
-      }
-      if (field->meta == TYPE_FUNC) {
-        fprintf(stderr, "function return types not allowed\n");
-        return 1;
-      }
-      return 0;
-  }
-}
-
 int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* val) {
   switch (atom->type) {
     case ATOM_CHAR:
@@ -86,7 +53,7 @@ int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* va
       fprintf(stderr, "ATOM_IDENTIFIER not supported\n");
       return 1;
     case ATOM_INT:
-      val->type = &TYPE_I32;
+      val->type = TYPE_I32;
       val->data = malloc(sizeof(int));
       *(int*)val->data = (int)atoi(atom->name);
       if (val->data == 0 && strcmp(atom->name, "0") != 0) {
@@ -95,7 +62,7 @@ int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* va
       }
       break;
     case ATOM_STRING:
-      val->type = &TYPE_CSTR;
+      val->type = TYPE_CSTR;
       val->data = atom->name;
       break;
   }
@@ -372,7 +339,7 @@ int parse_defun (module_t* module, symbol_table_t* table, node_t* node) {
       return 1;
     }
     expr->let_table->names[i] = param_node->atom->name;
-    expr->let_table->values[i].type = type->fields + i;
+    expr->let_table->values[i].type = type->fields[i];
     param_node = param_node->next;
   }
 
@@ -450,6 +417,23 @@ int module_cache_init () {
   cache.len = 0;
   cache.max = 10;
   cache.modules = malloc(cache.max * sizeof(module_t));
+
+  type_t type;
+  MODULE_BUILTIN.num_types = 4;
+  MODULE_BUILTIN.types = type_new_i(MODULE_BUILTIN.num_types);
+  type = (type_t) { .name = (char*)"I8",  .meta = TYPE_PRIM,  .num_fields = 0 };
+  memcpy(MODULE_BUILTIN.types, &type, sizeof(type_t));
+  TYPE_I8 = MODULE_BUILTIN.types;
+  type = (type_t) { .name = (char*)"I32", .meta = TYPE_PRIM,  .num_fields = 0 };
+  memcpy(MODULE_BUILTIN.types + 1, &type, sizeof(type_t));
+  TYPE_I32 = MODULE_BUILTIN.types + 1;
+  type = (type_t) { .name = (char*)"Ptr", .meta = TYPE_PARAM, .num_fields = 1, .fields = NULL };
+  memcpy(MODULE_BUILTIN.types + 2, &type, sizeof(type_t));
+  TYPE_PTR = MODULE_BUILTIN.types + 2;
+  type = (type_t) { .name = (char*)"Ptr", .meta = TYPE_PARAM, .num_fields = 1, .fields = &MODULE_BUILTIN.types };
+  memcpy(MODULE_BUILTIN.types + 3, &type, sizeof(type_t));
+  TYPE_CSTR = MODULE_BUILTIN.types + 3;
+
   return 0;
 }
 
@@ -474,7 +458,7 @@ module_t* module_cache_find (char* name) {
 }
 
 int module_setup (module_t* module, node_t* root) {
-  module->num_deps = 0;
+  module->num_deps = 1;
   module->num_types = 0;
   module->table.num_symbols = 0;
   module->table.max_symbols = 0;
@@ -499,6 +483,7 @@ int module_setup (module_t* module, node_t* root) {
     node = node->next;
   }
   module->deps = malloc(module->num_deps * sizeof(module_t*));
+  module->deps[0] = &MODULE_BUILTIN;
   module->types = malloc(module->num_types * sizeof(type_t));
   module->table.max_symbols = module->table.num_symbols;
   module->table.names = malloc(module->table.max_symbols * sizeof(char*));
@@ -512,7 +497,7 @@ int module_parse_node (node_t* root, module_t* module) {
   }
 
   node_t* node = root->list->fst;
-  module_t** dep = module->deps;
+  module_t** dep = module->deps + 1;
   val_t* sym = module->table.values;
   int i_sym = 0;
   int i_type = 0;
@@ -537,7 +522,7 @@ int module_parse_node (node_t* root, module_t* module) {
           return 1;
         }
         module->types[i_type].name = name_node->atom->name;
-        if (parse_type(name_node->next, module->types + i_type) != 0) {
+        if (parse_type(module, name_node->next, module->types + i_type) != 0) {
           return 1;
         }
         i_type++;
@@ -545,7 +530,7 @@ int module_parse_node (node_t* root, module_t* module) {
         module->table.names[i_sym] = node->list->fst->next->atom->name;
         sym->type = malloc(sizeof(type_t));
         sym->type->name = NULL;
-        if (parse_type(node->list->fst->next->next, sym->type) != 0) {
+        if (parse_type(module, node->list->fst->next->next, sym->type) != 0) {
           return 1;
         }
         if (sym->type->meta == TYPE_FUNC) {

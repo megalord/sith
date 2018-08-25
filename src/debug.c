@@ -38,17 +38,23 @@ void type_print (type_t* type) {
       printf("_%d ::", type->num_fields);
       for (i = 0; i < type->num_fields - 1; i++) {
         printf(" ");
-        type_print(type->fields + i);
+        type_print(type->fields[i]);
         printf(" ->");
       }
       printf(" ");
-      type_print(type->fields + i);
+      type_print(type->fields[i]);
       break;
     case TYPE_PARAM:
       printf("(%s", type->name);
-      for (i = 0; i < type->num_fields; i++) {
-        printf(" ");
-        type_print(type->fields + i);
+      if (type->fields == NULL) {
+        for (i = 0; i < type->num_fields; i++) {
+          printf(" %c", 'a' + i);
+        }
+      } else {
+        for (i = 0; i < type->num_fields; i++) {
+          printf(" ");
+          type_print(type->fields[i]);
+        }
       }
       printf(")");
       break;
@@ -81,7 +87,7 @@ void module_print (module_t* module) {
   printf("defines symbols:\n");
   for (int i = 0; i < module->table.num_symbols; i = i + 1) {
     printf(" - ");
-    val_print(module->table.names[i], &module->table.values[i], 0);
+    val_print(module->table.names[i], module->table.values + i, 0);
     printf("\n");
   }
   for (int i = 0; i < module->num_deps; i = i + 1) {
