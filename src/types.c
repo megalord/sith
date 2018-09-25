@@ -26,12 +26,10 @@ int parse_type_func (module_t* mod, type_t* type, node_t* node);
 int parse_type_sum (module_t* mod, type_t* type, node_t* node);
 int parse_type_product (module_t* mod, type_t* type, node_t* node);
 int type_matches_node (type_t* type, node_t* node);
-int type_add_constructors (module_t* mod, type_t* type);
 type_t* type_find (module_t* mod, node_t* node);
 type_t* module_type_find (module_t* mod, char* name, int* i0, int* j0, int* k0);
 
 int parse_type (module_t* mod, node_t* node, type_t* type) {
-  int ret = 0;
   type->field_names = NULL;
   type->is_template = 0;
   switch (node->type) {
@@ -55,28 +53,24 @@ int parse_type (module_t* mod, node_t* node, type_t* type) {
       if (strcmp(node->atom->name, "->") == 0) {
         type->meta = TYPE_FUNC;
         type->fields = malloc(type->num_fields * sizeof(type_t*));
-        ret = parse_type_func(mod, type, node->next);
+        return parse_type_func(mod, type, node->next);
       } else if (strcmp(node->atom->name, "+") == 0) {
         type->meta = TYPE_SUM;
         type->fields = NULL;
-        ret = parse_type_sum(mod, type, node->next);
+        return parse_type_sum(mod, type, node->next);
       } else if (strcmp(node->atom->name, "*") == 0) {
         type->meta = TYPE_PRODUCT;
         type->fields = NULL;
-        ret = parse_type_product(mod, type, node->next);
+        return parse_type_product(mod, type, node->next);
       } else {
         type->meta = TYPE_PARAM;
         type->name = node->atom->name;
         type->fields = NULL;
         fprintf(stderr, "param types not supported\n");
-        ret = 1;
+        return 1;
       }
   }
-
-  if (ret != 0) {
-    return ret;
-  }
-  return type_add_constructors(mod, type);
+  return 0;
 }
 
 int parse_type_func (module_t* mod, type_t* type, node_t* node) {

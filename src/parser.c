@@ -73,10 +73,10 @@ int parse_if (module_t* module, symbol_table_t* table, list_t* list, expr_t* exp
   if (parse_expr(module, table, node, expr->if_cond) != 0) {
     return 1;
   }
-  //if (strcmp(expr->if_cond->type->name, "Bool") != 0) {
-  //  fprintf(stderr, "if condition must be bool, got %s\n", expr->if_cond->type->name);
-  //  return 1;
-  //}
+  if (strcmp(expr->if_cond->type->name, "Bool") != 0) {
+    fprintf(stderr, "if condition must be bool, got %s\n", expr->if_cond->type->name);
+    return 1;
+  }
   node = node->next;
   if (parse_expr(module, table, node, expr->if_) != 0) {
     return 1;
@@ -247,7 +247,7 @@ int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t
     }
     node = node->next;
   }
-  expr->type = expr->fn->type;
+  expr->type = expr->fn->type->fields[expr->fn->type->num_fields - 1];
   return 0;
 }
 
@@ -259,7 +259,14 @@ int parse_expr (module_t* module, symbol_table_t* table, node_t* node, expr_t* e
         expr->var_name = node->atom->name;
         expr->var = symbol_table_get(table, expr->var_name);
         if (expr->var == NULL) {
+          expr->var = module_deps_symbol_find(module, expr->var_name);
+        }
+        if (expr->var == NULL) {
           fprintf(stderr, "var %s not found\n", expr->var_name);
+          return 1;
+        }
+        if (expr->var->type->meta == TYPE_FUNC) {
+          fprintf(stderr, "%s is a function\n", expr->var_name);
           return 1;
         }
         expr->type = expr->var->type;
@@ -549,6 +556,11 @@ int module_parse_node (node_t* root, module_t* module) {
     node = node->next;
   }
 
+  // This is done after type parsing because type constructors would invalidate i_sym
+  for (int i = 0; i < module->num_types; i++) {
+    type_add_constructors(module, module->types + i);
+  }
+
   node = root->list->fst;
   for (int i = 0; i < root->list->len; i++) {
     if (node->list->fst->type == NODE_ATOM) {
@@ -568,9 +580,11 @@ int module_parse_node (node_t* root, module_t* module) {
 int module_parse_file (char* filename, module_t* module) {
   node_t root;
   if (node_from_file(filename, &root) != 0) {
+    fprintf(stderr, "failed in lexing\n");
     return 1;
   }
   if (module_parse_node(&root, module) != 0) {
+    fprintf(stderr, "failed in parsing\n");
     return 1;
   }
   return 0;

@@ -1,10 +1,10 @@
-(include "builtin")
+(include "data/bool")
 (include "c/stdio")
 
 (: main (-> I32))
 (defun (main)
-  (if (eq 0 0)
-    (if (eq 1 1)
+  (if (eq True True)
+    (if (eq False False)
         (puts "true")
         (puts "false"))
     (puts "false"))

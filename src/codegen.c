@@ -31,6 +31,9 @@ LLVMTypeRef type_to_llvm (type_t* type) {
       return NULL;
     }
     return LLVMPointerType(type_to_llvm(type->fields[0]), 0);
+  } else if (type->meta == TYPE_SUM) {
+    // TODO: handle sum types with data
+    return LLVMInt8Type();
   } else {
     fprintf(stderr, "cannot convert type %s\n", type->name);
     return NULL;
@@ -193,7 +196,12 @@ int compile_funcall (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBui
     return 0;
   }
 
-  *result = LLVMBuildCall(builder, LLVMGetNamedFunction(mod->llvm, expr->fn_name), args, expr->num_params, expr->fn_name);
+  LLVMValueRef fn = LLVMGetNamedFunction(mod->llvm, expr->fn_name);
+  if (fn == NULL) {
+    fprintf(stderr, "function %s not found\n", expr->fn_name);
+    return 1;
+  }
+  *result = LLVMBuildCall(builder, fn, args, expr->num_params, expr->fn_name);
   return 0;
 }
 

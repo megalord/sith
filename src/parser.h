@@ -124,6 +124,7 @@ type_t* TYPE_CSTR;
 type_t* type_new_i (int i);
 type_t* type_new ();
 
+int type_add_constructors (module_t* mod, type_t* type);
 int parse_type (module_t* module, node_t* node, type_t* type);
 int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* val);
 int parse_if (module_t* module, symbol_table_t* table, list_t* list, expr_t* expr);
