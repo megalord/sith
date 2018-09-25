@@ -54,6 +54,7 @@ typedef enum {
 typedef struct type_t {
   char* name;
   meta_type_t meta;
+  int is_template; // for param type templates
   int num_fields;
   struct type_t** fields;
   char** field_names; // for sum or product types
@@ -62,7 +63,7 @@ typedef struct type_t {
 typedef struct val_t {
   type_t* type;
   union {
-    // type.meta == TYPE_PRIM
+    // type.meta == TYPE_PRIM or TYPE_SUM without data
     struct { void* data; }; // use type.name, should be either string or int
     // type.meta == TYPE_FUNC or let binding
     struct { struct expr_t* body; };
@@ -114,10 +115,14 @@ typedef struct {
   module_t* modules;
 } module_cache_t;
 
+type_t* TYPE_POLY;
 type_t* TYPE_I8;
 type_t* TYPE_I32;
 type_t* TYPE_PTR;
 type_t* TYPE_CSTR;
+
+type_t* type_new_i (int i);
+type_t* type_new ();
 
 int parse_type (module_t* module, node_t* node, type_t* type);
 int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* val);

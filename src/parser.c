@@ -15,7 +15,6 @@ char cwd[1024];
 const char* stdlib = "/usr/local/lib/sith/";
 module_cache_t cache = { .len = 0, .max = 0, .modules = NULL };
 
-type_t* type_new_i (int i);
 module_t MODULE_BUILTIN = {
   .name = (char*)"builtin",
   .num_deps = 0,
@@ -74,6 +73,10 @@ int parse_if (module_t* module, symbol_table_t* table, list_t* list, expr_t* exp
   if (parse_expr(module, table, node, expr->if_cond) != 0) {
     return 1;
   }
+  //if (strcmp(expr->if_cond->type->name, "Bool") != 0) {
+  //  fprintf(stderr, "if condition must be bool, got %s\n", expr->if_cond->type->name);
+  //  return 1;
+  //}
   node = node->next;
   if (parse_expr(module, table, node, expr->if_) != 0) {
     return 1;
@@ -419,20 +422,23 @@ int module_cache_init () {
   cache.modules = malloc(cache.max * sizeof(module_t));
 
   type_t type;
-  MODULE_BUILTIN.num_types = 4;
+  MODULE_BUILTIN.num_types = 5;
   MODULE_BUILTIN.types = type_new_i(MODULE_BUILTIN.num_types);
-  type = (type_t) { .name = (char*)"I8",  .meta = TYPE_PRIM,  .num_fields = 0 };
+  type = (type_t) { .name = (char*)"POLY", .meta = TYPE_PRIM,  .num_fields = 0, .is_template = 0 };
   memcpy(MODULE_BUILTIN.types, &type, sizeof(type_t));
-  TYPE_I8 = MODULE_BUILTIN.types;
-  type = (type_t) { .name = (char*)"I32", .meta = TYPE_PRIM,  .num_fields = 0 };
+  TYPE_POLY = MODULE_BUILTIN.types;
+  type = (type_t) { .name = (char*)"I8",   .meta = TYPE_PRIM,  .num_fields = 0, .is_template = 0 };
   memcpy(MODULE_BUILTIN.types + 1, &type, sizeof(type_t));
-  TYPE_I32 = MODULE_BUILTIN.types + 1;
-  type = (type_t) { .name = (char*)"Ptr", .meta = TYPE_PARAM, .num_fields = 1, .fields = NULL };
+  TYPE_I8 = MODULE_BUILTIN.types + 1;
+  type = (type_t) { .name = (char*)"I32",  .meta = TYPE_PRIM,  .num_fields = 0, .is_template = 0 };
   memcpy(MODULE_BUILTIN.types + 2, &type, sizeof(type_t));
-  TYPE_PTR = MODULE_BUILTIN.types + 2;
-  type = (type_t) { .name = (char*)"Ptr", .meta = TYPE_PARAM, .num_fields = 1, .fields = &MODULE_BUILTIN.types };
+  TYPE_I32 = MODULE_BUILTIN.types + 2;
+  type = (type_t) { .name = (char*)"Ptr",  .meta = TYPE_PARAM, .num_fields = 1, .is_template = 1, .fields = &TYPE_POLY };
   memcpy(MODULE_BUILTIN.types + 3, &type, sizeof(type_t));
-  TYPE_CSTR = MODULE_BUILTIN.types + 3;
+  TYPE_PTR = MODULE_BUILTIN.types + 3;
+  type = (type_t) { .name = (char*)"Ptr",  .meta = TYPE_PARAM, .num_fields = 1, .is_template = 0, .fields = &TYPE_I8 };
+  memcpy(MODULE_BUILTIN.types + 4, &type, sizeof(type_t));
+  TYPE_CSTR = MODULE_BUILTIN.types + 4;
 
   return 0;
 }
@@ -528,7 +534,7 @@ int module_parse_node (node_t* root, module_t* module) {
         i_type++;
       } else if (strcmp(name, ":") == 0) {
         module->table.names[i_sym] = node->list->fst->next->atom->name;
-        sym->type = malloc(sizeof(type_t));
+        sym->type = type_new();
         sym->type->name = NULL;
         if (parse_type(module, node->list->fst->next->next, sym->type) != 0) {
           return 1;

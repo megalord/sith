@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -22,12 +23,17 @@ type_t* type_new_i (int i) {
 }
 
 int parse_type_func (module_t* mod, type_t* type, node_t* node);
+int parse_type_sum (module_t* mod, type_t* type, node_t* node);
+int parse_type_product (module_t* mod, type_t* type, node_t* node);
 int type_matches_node (type_t* type, node_t* node);
+int type_add_constructors (module_t* mod, type_t* type);
 type_t* type_find (module_t* mod, node_t* node);
 type_t* module_type_find (module_t* mod, char* name, int* i0, int* j0, int* k0);
 
 int parse_type (module_t* mod, node_t* node, type_t* type) {
+  int ret = 0;
   type->field_names = NULL;
+  type->is_template = 0;
   switch (node->type) {
     case NODE_ATOM:
       type->meta = TYPE_ALIAS;
@@ -38,10 +44,9 @@ int parse_type (module_t* mod, node_t* node, type_t* type) {
         return 1;
       }
       type->fields = &field;
-      return 0;
+      break;
     case NODE_LIST:
       type->num_fields = node->list->len - 1;
-      type->fields = malloc(type->num_fields * sizeof(type_t*));
       node = node->list->fst;
       if (node->type != NODE_ATOM) {
         fprintf(stderr, "invalid signature\n");
@@ -49,22 +54,29 @@ int parse_type (module_t* mod, node_t* node, type_t* type) {
       }
       if (strcmp(node->atom->name, "->") == 0) {
         type->meta = TYPE_FUNC;
-        return parse_type_func(mod, type, node->next);
+        type->fields = malloc(type->num_fields * sizeof(type_t*));
+        ret = parse_type_func(mod, type, node->next);
       } else if (strcmp(node->atom->name, "+") == 0) {
         type->meta = TYPE_SUM;
-        fprintf(stderr, "sum types not supported\n");
-        return 1;
+        type->fields = NULL;
+        ret = parse_type_sum(mod, type, node->next);
       } else if (strcmp(node->atom->name, "*") == 0) {
         type->meta = TYPE_PRODUCT;
-        fprintf(stderr, "product types not supported\n");
-        return 1;
+        type->fields = NULL;
+        ret = parse_type_product(mod, type, node->next);
       } else {
         type->meta = TYPE_PARAM;
         type->name = node->atom->name;
+        type->fields = NULL;
         fprintf(stderr, "param types not supported\n");
-        return 1;
+        ret = 1;
       }
   }
+
+  if (ret != 0) {
+    return ret;
+  }
+  return type_add_constructors(mod, type);
 }
 
 int parse_type_func (module_t* mod, type_t* type, node_t* node) {
@@ -85,12 +97,102 @@ int parse_type_func (module_t* mod, type_t* type, node_t* node) {
   return 0;
 }
 
+int parse_type_product (module_t* mod, type_t* type, node_t* node) {
+  if (type->num_fields % 2 != 0) {
+    fprintf(stderr, "invalid product type: wrong number of nodes");
+    return 1;
+  }
+  type->num_fields = type->num_fields / 2;
+  type->fields = malloc(type->num_fields * sizeof(type_t*));
+  type->field_names = malloc(type->num_fields * sizeof(char*));
+
+  node_t* sub_node;
+  type_t* field;
+  for (int i = 0; i < type->num_fields; i++) {
+    if (node->type != NODE_ATOM) {
+      fprintf(stderr, "invalid product type: field name must be an atom\n");
+      return 1;
+    }
+    type->field_names[i] = node->atom->name;
+
+    node = node->next;
+    field = NULL;
+    switch (node->type) {
+      case NODE_ATOM:
+        field = type_find(mod, node);
+        if (field == NULL) {
+          fprintf(stderr, "invalid product type: field type not found %s\n", node->atom->name);
+          return 1;
+        }
+        break;
+      case NODE_LIST:
+        sub_node = node->list->fst;
+        if (sub_node->type != NODE_ATOM) {
+          fprintf(stderr, "invalid product type: field type invalid form\n");
+          return 1;
+        }
+        field = type_find(mod, sub_node);
+        if (field == NULL) {
+          fprintf(stderr, "invalid product type: field type not found %s\n", sub_node->atom->name);
+          return 1;
+        }
+        break;
+    }
+    type->fields[i] = field;
+    node = node->next;
+  }
+  return 0;
+}
+
+int parse_type_sum (module_t* mod, type_t* type, node_t* node) {
+  node_t* sub_node;
+  type_t* field;
+  type->field_names = malloc(type->num_fields * sizeof(char*));
+  type->fields = malloc(type->num_fields * sizeof(type_t*));
+  for (int i = 0; i < type->num_fields; i++) {
+    field = NULL;
+    switch (node->type) {
+      case NODE_ATOM:
+        type->field_names[i] = node->atom->name;
+        break;
+      case NODE_LIST:
+        sub_node = node->list->fst;
+        if (sub_node->type != NODE_ATOM) {
+          fprintf(stderr, "invalid sum type\n");
+          return 1;
+        }
+        type->field_names[i] = sub_node->atom->name;
+        for (int j = 0; j < node->list->len; j++) {
+          sub_node = sub_node->next;
+          if (sub_node->type != NODE_ATOM) {
+            fprintf(stderr, "invalid sum type\n");
+            return 1;
+          }
+          if (strlen(sub_node->atom->name) == 1 && islower(sub_node->atom->name[0])) {
+            type->is_template = 1;
+            field = TYPE_POLY;
+          } else {
+            field = type_find(mod, sub_node);
+            if (field == NULL) {
+              fprintf(stderr, "type not found\n");
+              return 1;
+            }
+          }
+        }
+        break;
+    }
+    type->fields[i] = field;
+    node = node->next;
+  }
+  return 0;
+}
+
 int type_matches_node (type_t* type, node_t* node) {
   switch (node->type) {
     case NODE_ATOM:
-      return type->meta != TYPE_PARAM && !strcmp(type->name, node->atom->name);
+      return type->meta != TYPE_PARAM && strcmp(type->name, node->atom->name) == 0;
     case NODE_LIST:
-      if (type->meta != TYPE_PARAM || type->fields == NULL || type->num_fields != node->list->len - 1) {
+      if (type->meta != TYPE_PARAM || type->num_fields != node->list->len - 1) {
         return 0;
       }
       node = node->list->fst;
@@ -127,12 +229,11 @@ type_t* type_find (module_t* mod, node_t* node) {
       type_t* param_type = NULL;
       type_t* type = module_type_find(mod, name, &i, &j, &k);
       while (type != NULL) {
-        if (type_matches_node(type, node)) {
-          return type;
-        }
-        // if the type doesn't fully match but it's parametrized, save it for later to create an instance
-        if (type->meta == TYPE_PARAM && type->fields == NULL && type->num_fields == node->list->len - 1) {
+        // if the type is parametrized, save it for later to create an instance
+        if (type->meta == TYPE_PARAM && type->is_template && type->num_fields == node->list->len - 1) {
           param_type = type;
+        } else if (type_matches_node(type, node)) {
+          return type;
         }
         type = module_type_find(mod, name, &i, &j, &k);
       }
@@ -152,7 +253,7 @@ type_t* module_type_new (module_t* mod) {
 
 type_t* module_type_find (module_t* mod, char* name, int* i0, int* j0, int* k0) {
   for (int i = *i0; i < mod->num_types; i++) {
-    if (strcmp(mod->types[i].name, name) == 0) {
+    if (mod->types[i].name != NULL && strcmp(mod->types[i].name, name) == 0) {
       *i0 = i + 1;
       return mod->types + i;
     }
@@ -176,6 +277,28 @@ type_t* module_type_find (module_t* mod, char* name, int* i0, int* j0, int* k0) 
   *j0 = mod->num_deps;
 
   return NULL;
+}
+
+int type_add_constructors (module_t* mod, type_t* type) {
+  val_t val = { .type = type };
+  switch (type->meta) {
+    case TYPE_SUM:
+      // TODO: handle sum types with data
+      for (int i = 0; i < type->num_fields; i++) {
+        val.data = malloc(sizeof(int));
+        *(int*)val.data = i;
+        symbol_table_add(&mod->table, type->field_names[i], &val);
+      }
+      return 0;
+    case TYPE_PRODUCT:
+      fprintf(stderr, "type_add_constructors does not support product types\n");
+      return 1;
+    case TYPE_ALIAS:
+    case TYPE_PRIM:
+    case TYPE_FUNC:
+    case TYPE_PARAM:
+      return 0;
+  }
 }
 
 /*

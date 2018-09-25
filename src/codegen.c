@@ -59,6 +59,18 @@ int compile_const_val (val_t* val, LLVMBuilderRef builder, LLVMValueRef* result)
   return 0;
 }
 
+int compile_var (val_t* val, LLVMBuilderRef builder, LLVMValueRef* result) {
+  if (val->type->meta == TYPE_SUM) {
+    // TODO: handle sum types with data
+    *result = LLVMConstInt(LLVMInt8Type(), *(int*)val->data, false);
+  } else {
+    fprintf(stderr, "cannot compile var of type ");
+    type_print(val->type);
+    return 1;
+  }
+  return 0;
+}
+
 int compile_if (module_t* mod, symbol_table_t* table, expr_t *expr, LLVMBuilderRef builder, LLVMValueRef* result) {
   LLVMValueRef condition, results[2];
   LLVMValueRef fn = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
@@ -205,6 +217,9 @@ int compile_expr (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilde
     case EXPR_SWITCH:
       return compile_switch(mod, table, expr, builder, result);
     case EXPR_VAR:
+      if (expr->var->llvm == NULL && compile_var(expr->var, builder, &expr->var->llvm) != 0) {
+        return 1;
+      }
       *result = expr->var->llvm;
       return 0;
   }
@@ -260,18 +275,16 @@ int module_compile (module_t* mod) {
     }
     dep_table = mod->deps[i]->table;
     for (int j = 0; j < dep_table.num_symbols; j++) {
-      LLVMAddFunction(mod->llvm, dep_table.names[j], LLVMGetElementType(LLVMTypeOf(dep_table.values[j].llvm)));
+      if (dep_table.values[j].type->meta == TYPE_FUNC) {
+        LLVMAddFunction(mod->llvm, dep_table.names[j], LLVMGetElementType(LLVMTypeOf(dep_table.values[j].llvm)));
+      }
     }
   }
   val_t* val;
   int len = mod->table.num_symbols;
   for (int i = 0; i < len; i++) {
     val = mod->table.values + i;
-    if (val->type->meta != TYPE_FUNC) {
-      fprintf(stderr, "error compile top level expression %s in module %s\n", mod->table.names[i], mod->name);
-      return 1;
-    }
-    if (compile_fn(mod, val, mod->table.names[i]) != 0) {
+    if (val->type->meta == TYPE_FUNC && compile_fn(mod, val, mod->table.names[i]) != 0) {
       fprintf(stderr, "error compile function %s\n", mod->table.names[i]);
       return 1;
     }

@@ -58,6 +58,29 @@ void type_print (type_t* type) {
       }
       printf(")");
       break;
+    case TYPE_PRODUCT:
+      for (i = 0; i < type->num_fields; i++) {
+        if (i != 0) {
+          printf(", ");
+        }
+        printf("%s: ", type->field_names[i]);
+        type_print(type->fields[i]);
+      }
+      break;
+    case TYPE_SUM:
+      printf("%s { ", type->name);
+      for (i = 0; i < type->num_fields; i++) {
+        if (i != 0) {
+          printf(" | ");
+        }
+        if (type->field_names[i] != NULL) {
+          printf("%s", type->field_names[i]);
+        } else {
+          type_print(type->fields[i]);
+        }
+      }
+      printf(" }");
+      break;
     default:
       printf("???");
       break;
@@ -83,6 +106,12 @@ void module_print (module_t* module) {
   printf("requires:\n");
   for (int i = 0; i < module->num_deps; i = i + 1) {
     printf(" - %s\n", module->deps[i]->name);
+  }
+  printf("defines types:\n");
+  for (int i = 0; i < module->num_types; i = i + 1) {
+    printf(" - ");
+    type_print(module->types + i);
+    printf("\n");
   }
   printf("defines symbols:\n");
   for (int i = 0; i < module->table.num_symbols; i = i + 1) {
