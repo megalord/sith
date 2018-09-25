@@ -1,0 +1,10 @@
+(include "c/stdio")
+(include "data/bool")
+
+(: main (-> I32))
+(defun (main)
+  (let ((val False))
+    (match val
+      (True  (puts "true"))
+      (False (puts "false")))
+    0))

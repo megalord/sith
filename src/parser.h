@@ -16,6 +16,7 @@ typedef enum {
   EXPR_FUNCALL,
   EXPR_IF,
   EXPR_LET,
+  EXPR_MATCH,
   EXPR_PROGN,
   EXPR_SWITCH,
   EXPR_VAR
@@ -33,6 +34,8 @@ typedef struct expr_t {
     struct { struct expr_t *if_cond, *if_, *else_; };
     // EXPR_LET
     struct { struct symbol_table_t* let_table; struct expr_t* let_body; };
+    // EXPR_MATCH
+    struct { int num_pats; struct expr_t *match_cond, *match_pats, *match_bodies; };
     // EXPR_PROGN
     struct { int num_exprs; struct expr_t* exprs; };
     // EXPR_SWITCH

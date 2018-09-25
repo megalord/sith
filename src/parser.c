@@ -216,6 +216,58 @@ int parse_progn (module_t* module, symbol_table_t* table, node_t* node, expr_t* 
   return 0;
 }
 
+int parse_match (module_t* module, symbol_table_t* table, node_t* node, expr_t* expr) {
+  if (parse_expr(module, table, node, expr->match_cond) != 0) {
+    return 1;
+  }
+
+  if (expr->match_cond->type->meta != TYPE_SUM) {
+    fprintf(stderr, "invalid match: can only match on sum type\n");
+    return 1;
+  }
+
+  node_t* sub_node;
+  expr_t* curr_pat = expr->match_pats;
+  expr_t* curr_body = expr->match_bodies;
+  for (int i = 0; i < expr->num_pats; i++) {
+    node = node->next;
+    if (node->type != NODE_LIST || node->list->len != 2) {
+      fprintf(stderr, "invalid match: clause must be list with length 2\n");
+      return 1;
+    }
+    sub_node = node->list->fst;
+    if (parse_expr(module, table, sub_node, curr_pat) != 0) {
+      return 1;
+    }
+    if (curr_pat->form != EXPR_VAR && curr_pat->form != EXPR_FUNCALL) {
+      fprintf(stderr, "invalid match: pattern must be var or funcall, got %d\n", curr_pat->form);
+      return 1;
+    }
+    if (curr_pat->type != expr->match_cond->type) {
+      fprintf(stderr, "invalid match: pattern type does not fit condition\n");
+      return 1;
+    }
+
+    sub_node = sub_node->next;
+    if (curr_pat->form == EXPR_FUNCALL) {
+      curr_body->form = EXPR_LET;
+      curr_body->let_body = expr_new();
+      curr_body->let_table = symbol_table_new(table, curr_pat->num_params);
+      if (parse_expr(module, table, sub_node, curr_body->let_body) != 0) {
+        return 1;
+      }
+    } else {
+      if (parse_expr(module, table, sub_node, curr_body) != 0) {
+        return 1;
+      }
+    }
+
+    curr_pat++;
+    curr_body++;
+  }
+  return 0;
+}
+
 int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t* expr) {
   expr->fn_name = list->fst->atom->name;
   expr->fn = symbol_table_get(table, expr->fn_name);
@@ -307,6 +359,13 @@ int parse_expr (module_t* module, symbol_table_t* table, node_t* node, expr_t* e
         expr->case_bodies = expr_new_i(expr->num_cases);
         expr->case_vals = malloc(sizeof(val_list_t) * expr->num_cases);
         return parse_switch(module, table, node->list, expr);
+      } else if (strcmp(name, "match") == 0) {
+        expr->form = EXPR_MATCH;
+        expr->match_cond = expr_new();
+        expr->num_pats = node->list->len - 2;
+        expr->match_pats = expr_new_i(expr->num_pats);
+        expr->match_bodies = expr_new_i(expr->num_pats);
+        return parse_match(module, table, node->list->fst->next, expr);
       } else {
         expr->form = EXPR_FUNCALL;
         return parse_funcall(module, table, node->list, expr);

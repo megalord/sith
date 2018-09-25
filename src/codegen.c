@@ -138,6 +138,53 @@ int compile_let (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilder
   return compile_expr(mod, expr->let_table, expr->let_body, builder, result);
 }
 
+int compile_match (module_t* mod, symbol_table_t* table, expr_t *expr, LLVMBuilderRef builder, LLVMValueRef* result) {
+  LLVMValueRef condition, on_val;
+  LLVMValueRef fn = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
+
+  if (compile_expr(mod, table, expr->match_cond, builder, &condition) != 0) {
+    return 1;
+  }
+  LLVMBasicBlockRef else_bb = LLVMAppendBasicBlock(fn, "else");
+  LLVMBasicBlockRef end_bb = LLVMAppendBasicBlock(fn, "match_cont");
+  LLVMValueRef match_val = LLVMBuildSwitch(builder, condition, else_bb, expr->num_pats);
+
+  LLVMBasicBlockRef* bbs = malloc(sizeof(LLVMBasicBlockRef) * expr->num_pats);
+  LLVMValueRef* results = malloc(sizeof(LLVMValueRef) * expr->num_pats);
+  char pat_name[7];
+  for (int i = 0; i < expr->num_pats; i++) {
+    snprintf(pat_name, 7, "pat_%01d", i);
+    bbs[i] = LLVMAppendBasicBlock(fn, pat_name);
+    if (expr->match_pats[i].form != EXPR_VAR) {
+      fprintf(stderr, "no complex sum types\n");
+      return 1;
+    }
+
+    if (compile_expr(mod, table, expr->match_pats + i, builder, &on_val) != 0) {
+      return 1;
+    }
+    LLVMAddCase(match_val, on_val, bbs[i]);
+
+    LLVMPositionBuilderAtEnd(builder, bbs[i]);
+    if (compile_expr(mod, table, expr->match_bodies + i, builder, results + i) != 0) {
+      return 1;
+    }
+    LLVMBuildBr(builder, end_bb);
+    bbs[i] = LLVMGetInsertBlock(builder);
+  }
+
+  LLVMPositionBuilderAtEnd(builder, else_bb);
+  LLVMBuildUnreachable(builder);
+
+  LLVMPositionBuilderAtEnd(builder, end_bb);
+  *result = LLVMBuildPhi(builder, LLVMTypeOf(results[0]), "matchtmp");
+  LLVMAddIncoming(*result, results, bbs, expr->num_pats);
+
+  free(bbs);
+  free(results);
+  return 0;
+}
+
 int compile_switch (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilderRef builder, LLVMValueRef* result) {
   LLVMValueRef condition;
   LLVMValueRef fn = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
@@ -181,6 +228,7 @@ int compile_switch (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuil
   LLVMAddIncoming(*result, results, bbs, expr->num_cases);
 
   free(bbs);
+  free(results);
   return 0;
 }
 
@@ -220,6 +268,8 @@ int compile_expr (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilde
       return compile_if(mod, table, expr, builder, result);
     case EXPR_LET:
       return compile_let(mod, table, expr, builder, result);
+    case EXPR_MATCH:
+      return compile_match(mod, table, expr, builder, result);
     case EXPR_PROGN:
       for (int i = 0; i < expr->num_exprs; i++) {
         if (compile_expr(mod, table, expr->exprs + i, builder, result) != 0) {
