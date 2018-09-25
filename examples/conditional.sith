@@ -3,7 +3,7 @@
 
 (: main (-> I32))
 (defun (main)
-  (if (eq True True)
+  (if True
     (if (eq False False)
         (puts "true")
         (puts "false"))

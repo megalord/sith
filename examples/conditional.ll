@@ -1,13 +1,13 @@
 ; ModuleID = 'examples/conditional'
 source_filename = "examples/conditional"
 
-declare i8 @and(i8, i8)
+declare i1 @and(i1, i1)
 
-declare i8 @or(i8, i8)
+declare i1 @or(i1, i1)
 
-declare i8 @not(i8)
+declare i1 @not(i1)
 
-declare i8 @eq(i8, i8)
+declare i1 @eq(i8, i8)
 
 declare i32 @puts(i8*)
 

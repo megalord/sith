@@ -20,6 +20,7 @@ typedef void* (*fn_one_arg_t) (void*);
 typedef void* (*fn_two_arg_t) (void*, void*);
 typedef void* (*fn_three_arg_t) (void*, void*, void*);
 
+
 LLVMTypeRef type_to_llvm (type_t* type) {
   if (strcmp(type->name, "I8") == 0) {
     return LLVMInt8Type();
@@ -32,8 +33,12 @@ LLVMTypeRef type_to_llvm (type_t* type) {
     }
     return LLVMPointerType(type_to_llvm(type->fields[0]), 0);
   } else if (type->meta == TYPE_SUM) {
-    // TODO: handle sum types with data
-    return LLVMInt8Type();
+    if (strcmp(type->name, "Bool") == 0) {
+      return LLVMInt1Type();
+    } else {
+      // TODO: handle sum types with data
+      return LLVMInt8Type();
+    }
   } else {
     fprintf(stderr, "cannot convert type %s\n", type->name);
     return NULL;
@@ -65,7 +70,7 @@ int compile_const_val (val_t* val, LLVMBuilderRef builder, LLVMValueRef* result)
 int compile_var (val_t* val, LLVMBuilderRef builder, LLVMValueRef* result) {
   if (val->type->meta == TYPE_SUM) {
     // TODO: handle sum types with data
-    *result = LLVMConstInt(LLVMInt8Type(), *(int*)val->data, false);
+    *result = LLVMConstInt(type_to_llvm(val->type), *(int*)val->data, false);
   } else {
     fprintf(stderr, "cannot compile var of type ");
     type_print(val->type);
