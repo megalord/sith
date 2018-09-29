@@ -589,12 +589,12 @@ int module_parse_node (node_t* root, module_t* module) {
         dep++;
       } else if (strcmp(name, "deftype") == 0) {
         node_t* name_node = node->list->fst->next;
-        if (name_node->type != NODE_ATOM) {
+        if (name_node->type != NODE_ATOM && name_node->list->fst->type != NODE_ATOM) {
           fprintf(stderr, "invalid type name\n");
           return 1;
         }
-        module->types[i_type].name = name_node->atom->name;
-        if (parse_type(module, name_node->next, module->types + i_type) != 0) {
+        module->types[i_type].name = (name_node->type == NODE_ATOM) ? name_node->atom->name : name_node->list->fst->atom->name;
+        if (parse_type(module, name_node, module->types + i_type) != 0) {
           return 1;
         }
         i_type++;
@@ -602,7 +602,7 @@ int module_parse_node (node_t* root, module_t* module) {
         module->table.names[i_sym] = node->list->fst->next->atom->name;
         sym->type = type_new();
         sym->type->name = NULL;
-        if (parse_type(module, node->list->fst->next->next, sym->type) != 0) {
+        if (parse_type(module, node->list->fst->next, sym->type) != 0) {
           return 1;
         }
         if (sym->type->meta == TYPE_FUNC) {

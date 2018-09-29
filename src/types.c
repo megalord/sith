@@ -30,8 +30,14 @@ type_t* type_find (module_t* mod, node_t* node);
 type_t* module_type_find (module_t* mod, char* name, int* i0, int* j0, int* k0);
 
 int parse_type (module_t* mod, node_t* node, type_t* type) {
-  type->field_names = NULL;
   type->is_template = 0;
+  if (node->type == NODE_LIST) {
+    type->is_template = 1;
+    // do something with parameter names
+  }
+  node = node->next;
+
+  type->field_names = NULL;
   switch (node->type) {
     case NODE_ATOM:
       type->meta = TYPE_ALIAS;
@@ -156,19 +162,26 @@ int parse_type_sum (module_t* mod, type_t* type, node_t* node) {
           return 1;
         }
         type->field_names[i] = sub_node->atom->name;
-        for (int j = 0; j < node->list->len; j++) {
+        field = type_new();
+        field->name = sub_node->atom->name;
+        field->meta = TYPE_FUNC;
+        field->is_template = 0;
+        field->num_fields = node->list->len - 1;
+        field->field_names = NULL;
+        type->fields = malloc(field->num_fields * sizeof(type_t*));
+        for (int j = 0; j < field->num_fields; j++) {
           sub_node = sub_node->next;
           if (sub_node->type != NODE_ATOM) {
             fprintf(stderr, "invalid sum type\n");
             return 1;
           }
           if (strlen(sub_node->atom->name) == 1 && islower(sub_node->atom->name[0])) {
-            type->is_template = 1;
-            field = TYPE_POLY;
+            // TODO: lookup name
+            field->fields[i] = TYPE_POLY;
           } else {
-            field = type_find(mod, sub_node);
-            if (field == NULL) {
-              fprintf(stderr, "type not found\n");
+            field->fields[i] = type_find(mod, sub_node);
+            if (field->fields[i] == NULL) {
+              fprintf(stderr, "type %s not found\n", sub_node->atom->name);
               return 1;
             }
           }
@@ -209,22 +222,22 @@ int type_matches_node (type_t* type, node_t* node) {
 
 type_t* type_find (module_t* mod, node_t* node) {
   int i = 0, j = 0, k = 0;
-  node_t* fst;
+  node_t* sub_node;
   switch (node->type) {
     case NODE_ATOM:
       return module_type_find(mod, node->atom->name, &i, &j, &k);
     case NODE_LIST:
-      fst = node->list->fst;
-      if (fst->type != NODE_ATOM) {
+      sub_node = node->list->fst;
+      if (sub_node->type != NODE_ATOM) {
         fprintf(stderr, "could not determine type name\n");
         return NULL;
       }
-      char* name = fst->atom->name;
+      char* name = sub_node->atom->name;
       type_t* param_type = NULL;
       type_t* type = module_type_find(mod, name, &i, &j, &k);
       while (type != NULL) {
         // if the type is parametrized, save it for later to create an instance
-        if (type->meta == TYPE_PARAM && type->is_template && type->num_fields == node->list->len - 1) {
+        if (type->is_template) {
           param_type = type;
         } else if (type_matches_node(type, node)) {
           return type;
@@ -232,9 +245,15 @@ type_t* type_find (module_t* mod, node_t* node) {
         type = module_type_find(mod, name, &i, &j, &k);
       }
 
-      //if (param_type != NULL) {
-      //  return type_add_instance(mod, param_type, node);
-      //}
+      if (param_type != NULL) {
+        for (int l = 1; l < node->list->len; l++) {
+          sub_node = sub_node->next;
+          if (sub_node->type == NODE_ATOM && strlen(sub_node->atom->name) == 1 && islower(sub_node->atom->name[0])) {
+            return param_type;
+          }
+        }
+        //return type_add_instance(mod, param_type, node);
+      }
 
       return NULL;
   }
@@ -267,6 +286,7 @@ type_t* module_type_find (module_t* mod, char* name, int* i0, int* j0, int* k0) 
       *j0 = j;
       return type;
     }
+    *k0 = 0;
   }
   *j0 = mod->num_deps;
 
@@ -274,14 +294,28 @@ type_t* module_type_find (module_t* mod, char* name, int* i0, int* j0, int* k0) 
 }
 
 int type_add_constructors (module_t* mod, type_t* type) {
+  int has_data = 0;
   val_t val = { .type = type };
   switch (type->meta) {
     case TYPE_SUM:
-      // TODO: handle sum types with data
       for (int i = 0; i < type->num_fields; i++) {
-        val.data = malloc(sizeof(int));
-        *(int*)val.data = i;
-        symbol_table_add(&mod->table, type->field_names[i], &val);
+        if (type->fields[0] != NULL) {
+          has_data = 1;
+          break;
+        }
+      }
+      if (has_data) {
+        for (int i = 0; i < type->num_fields; i++) {
+          val.type = type->fields[i];
+          //val.fields; // TODO ???
+          symbol_table_add(&mod->table, type->field_names[i], &val);
+        }
+      } else {
+        for (int i = 0; i < type->num_fields; i++) {
+          val.data = malloc(sizeof(int));
+          *(int*)val.data = i;
+          symbol_table_add(&mod->table, type->field_names[i], &val);
+        }
       }
       return 0;
     case TYPE_PRODUCT:
