@@ -3,6 +3,8 @@ source_filename = "examples/hello-world"
 
 declare i32 @puts(i8*)
 
+declare i32 @putchar(i32)
+
 define i32 @hello(i8*) {
 entry:
   %1 = alloca [6 x i8], i8 1

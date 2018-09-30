@@ -11,6 +11,8 @@ declare i1 @eq(i8, i8)
 
 declare i32 @puts(i8*)
 
+declare i32 @putchar(i32)
+
 define i32 @main() {
 entry:
   br i1 true, label %then, label %else

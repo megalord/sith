@@ -3,6 +3,8 @@ source_filename = "examples/switch"
 
 declare i32 @puts(i8*)
 
+declare i32 @putchar(i32)
+
 define i32 @main() {
 entry:
   switch i32 0, label %else [

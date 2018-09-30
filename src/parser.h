@@ -61,6 +61,7 @@ typedef struct type_t {
   int num_fields;
   struct type_t** fields;
   char** field_names; // for sum or product types
+  LLVMTypeRef llvm; // populated during compilation
 } type_t;
 
 typedef struct val_t {

@@ -3,6 +3,8 @@ source_filename = "examples/match"
 
 declare i32 @puts(i8*)
 
+declare i32 @putchar(i32)
+
 declare i1 @and(i1, i1)
 
 declare i1 @or(i1, i1)

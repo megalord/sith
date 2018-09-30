@@ -293,6 +293,34 @@ type_t* module_type_find (module_t* mod, char* name, int* i0, int* j0, int* k0) 
   return NULL;
 }
 
+type_t* type_sum_constructor (type_t* sum) {
+  type_t* type = type_new();
+  type->name = sum->name;
+  type->meta = TYPE_FUNC;
+  type->is_template = 0;
+  type->field_names = NULL;
+  type->num_fields = sum->num_fields + 1;
+  type->fields = malloc(type->num_fields * sizeof(type_t*));
+  int i;
+  for (i = 0; i < sum->num_fields; i++) {
+    type->fields[i] = sum->fields[i];
+  }
+  type->fields[i] = sum;
+  return type;
+}
+
+type_t* type_sum_getter (type_t* field, type_t* sum) {
+  type_t* type = type_new();
+  type->meta = TYPE_FUNC;
+  type->is_template = 0;
+  type->field_names = NULL;
+  type->num_fields = 2;
+  type->fields = malloc(type->num_fields * sizeof(type_t*));
+  type->fields[0] = sum;
+  type->fields[1] = field;
+  return type;
+}
+
 int type_add_constructors (module_t* mod, type_t* type) {
   int has_data = 0;
   val_t val = { .type = type };
@@ -319,8 +347,14 @@ int type_add_constructors (module_t* mod, type_t* type) {
       }
       return 0;
     case TYPE_PRODUCT:
-      fprintf(stderr, "type_add_constructors does not support product types\n");
-      return 1;
+      val.type = type_sum_constructor(type);
+      symbol_table_add(&mod->table, type->name, &val);
+      for (int i = 0; i < type->num_fields; i++) {
+        val.type = type_sum_getter(type->fields[i], type);
+        val.type->name = type->field_names[i];
+        symbol_table_add(&mod->table, type->field_names[i], &val);
+      }
+      return 0;
     case TYPE_ALIAS:
     case TYPE_PRIM:
     case TYPE_FUNC:

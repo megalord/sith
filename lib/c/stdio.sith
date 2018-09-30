@@ -1,1 +1,2 @@
 (: puts (-> (Ptr I8) I32))
+(: putchar (-> I32 I32))

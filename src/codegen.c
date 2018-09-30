@@ -22,6 +22,10 @@ typedef void* (*fn_three_arg_t) (void*, void*, void*);
 
 
 LLVMTypeRef type_to_llvm (type_t* type) {
+  if (type->llvm != NULL) {
+    return type->llvm;
+  }
+
   if (strcmp(type->name, "I8") == 0) {
     return LLVMInt8Type();
   } else if (strcmp(type->name, "I32") == 0) {
@@ -42,6 +46,22 @@ LLVMTypeRef type_to_llvm (type_t* type) {
   } else {
     fprintf(stderr, "cannot convert type %s\n", type->name);
     return NULL;
+  }
+}
+
+int compile_type (module_t* mod, type_t* type) {
+  LLVMTypeRef* types;
+  switch (type->meta) {
+    case TYPE_PRODUCT:
+      types = malloc(type->num_fields * sizeof(LLVMTypeRef));
+      for (int i = 0; i < type->num_fields; i++) {
+        types[i] = type_to_llvm(type->fields[i]);
+      }
+      type->llvm = LLVMStructType(types, type->num_fields, 0);
+      return 0;
+    default:
+      fprintf(stderr, "cannot compile type %s\n", type->name);
+      return 1;
   }
 }
 
@@ -288,7 +308,7 @@ int compile_expr (module_t* mod, symbol_table_t* table, expr_t* expr, LLVMBuilde
   }
 }
 
-int compile_fn (module_t* mod, val_t* val, char* name) {
+int compile_fn_type (module_t* mod, val_t* val, char* name) {
   type_t type = *val->type;
   int i;
   LLVMTypeRef* param_types = malloc((type.num_fields - 1) * sizeof(LLVMTypeRef));
@@ -304,13 +324,16 @@ int compile_fn (module_t* mod, val_t* val, char* name) {
   }
   LLVMTypeRef fn_type = LLVMFunctionType(ret_type, param_types, type.num_fields - 1, 0);
   val->llvm = LLVMAddFunction(mod->llvm, name, fn_type);
+  return 0;
+}
 
+int compile_fn (module_t* mod, val_t* val, char* name) {
   // ffi declaration
   if (val->body == NULL) {
     return 0;
   }
 
-  for (i = 0; i < type.num_fields - 1; i++) {
+  for (int i = 0; i < val->type->num_fields - 1; i++) {
     val->body->let_table->values[i].llvm = LLVMGetParam(val->llvm, i);
   }
 
@@ -343,9 +366,26 @@ int module_compile (module_t* mod) {
       }
     }
   }
+
+  type_t* type;
+  for (int i = 0; i < mod->num_types; i++) {
+    type = mod->types + i;
+    if (type->meta == TYPE_PRODUCT && compile_type(mod, type) != 0) {
+      fprintf(stderr, "error compile type %s\n", type->name);
+      return 1;
+    }
+  }
+
   val_t* val;
-  int len = mod->table.num_symbols;
-  for (int i = 0; i < len; i++) {
+  for (int i = 0; i < mod->table.num_symbols; i++) {
+    val = mod->table.values + i;
+    if (val->type->meta == TYPE_FUNC && compile_fn_type(mod, val, mod->table.names[i]) != 0) {
+      fprintf(stderr, "error compile function type %s\n", mod->table.names[i]);
+      return 1;
+    }
+  }
+
+  for (int i = 0; i < mod->table.num_symbols; i++) {
     val = mod->table.values + i;
     if (val->type->meta == TYPE_FUNC && compile_fn(mod, val, mod->table.names[i]) != 0) {
       fprintf(stderr, "error compile function %s\n", mod->table.names[i]);

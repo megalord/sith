@@ -120,12 +120,6 @@ int parse_let (module_t* module, symbol_table_t* parent, list_t* list, expr_t* e
     table->names[i] = sub_node->atom->name;
     sub_node = sub_node->next;
 
-    // TODO: allow expressions
-    if (sub_node->type != NODE_ATOM) {
-      fprintf(stderr, "let variable values must be constants\n");
-      return 1;
-    }
-
     var_expr = expr_new();
     if (parse_expr(module, parent, sub_node, var_expr) != 0) {
       return 1;

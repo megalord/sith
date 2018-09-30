@@ -1,0 +1,11 @@
+(include "c/stdio")
+
+(deftype Atom
+  (* line I32
+     pos  I32))
+
+(: main (-> I32))
+(defun (main)
+  (let ((a (Atom 1 7)))
+    (putchar (line a)))
+  0)
