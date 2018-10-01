@@ -57,7 +57,8 @@ int compile_type (module_t* mod, type_t* type) {
       for (int i = 0; i < type->num_fields; i++) {
         types[i] = type_to_llvm(type->fields[i]);
       }
-      type->llvm = LLVMStructType(types, type->num_fields, 0);
+      type->llvm = LLVMStructCreateNamed(LLVMGetGlobalContext(), type->name);
+      LLVMStructSetBody(type->llvm, types, type->num_fields, 0);
       return 0;
     default:
       fprintf(stderr, "cannot compile type %s\n", type->name);
@@ -352,6 +353,39 @@ int compile_fn (module_t* mod, val_t* val, char* name) {
   return 0;
 }
 
+int compile_type_constructor(module_t* mod, type_t* type) {
+  LLVMValueRef fn = LLVMGetNamedFunction(mod->llvm, type->name);
+
+  LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fn, "entry");
+  LLVMBuilderRef builder = LLVMCreateBuilder();
+  LLVMPositionBuilderAtEnd(builder, entry);
+
+  LLVMValueRef gep_indices[2], ptr;
+  LLVMValueRef result = LLVMBuildAlloca(builder, type->llvm, type->name);
+
+  // The first operand indexes through the pointer
+  gep_indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+  for (int i = 0; i < type->num_fields; i++) {
+    gep_indices[1] = LLVMConstInt(LLVMInt32Type(), i, false);
+    ptr = LLVMBuildGEP(builder, result, gep_indices, 2, type->field_names[i]);
+    LLVMBuildStore(builder, LLVMGetParam(fn, i), ptr);
+  }
+
+  LLVMBuildRet(builder, LLVMBuildLoad(builder, result, "load"));
+  return 0;
+}
+
+int compile_type_getter(module_t* mod, int index, char* name) {
+  LLVMValueRef fn = LLVMGetNamedFunction(mod->llvm, name);
+
+  LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fn, "entry");
+  LLVMBuilderRef builder = LLVMCreateBuilder();
+  LLVMPositionBuilderAtEnd(builder, entry);
+
+  LLVMBuildRet(builder, LLVMBuildExtractValue(builder, LLVMGetParam(fn, 0), index, name));
+  return 0;
+}
+
 int module_compile (module_t* mod) {
   symbol_table_t dep_table;
   mod->llvm = LLVMModuleCreateWithName(mod->name);
@@ -382,6 +416,22 @@ int module_compile (module_t* mod) {
     if (val->type->meta == TYPE_FUNC && compile_fn_type(mod, val, mod->table.names[i]) != 0) {
       fprintf(stderr, "error compile function type %s\n", mod->table.names[i]);
       return 1;
+    }
+  }
+
+  for (int i = 0; i < mod->num_types; i++) {
+    type = mod->types + i;
+    if (type->meta == TYPE_PRODUCT) {
+      if (compile_type_constructor(mod, type) != 0) {
+        fprintf(stderr, "error compile type constructor %s\n", type->name);
+        return 1;
+      }
+      for (int j = 0; j < type->num_fields; j++) {
+        if (compile_type_getter(mod, j, type->field_names[j]) != 0) {
+          fprintf(stderr, "error compile type getter %s/%s\n", type->name, type->field_names[j]);
+          return 1;
+        }
+      }
     }
   }
 

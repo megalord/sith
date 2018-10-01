@@ -6,6 +6,7 @@
 
 (: main (-> I32))
 (defun (main)
-  (let ((a (Atom 1 7)))
-    (putchar (line a)))
+  (let ((a (Atom 72 105)))
+    (putchar (line a))
+    (putchar (pos a)))
   0)
