@@ -1,6 +1,9 @@
 ; ModuleID = 'examples/conditional'
 source_filename = "examples/conditional"
 
+@False = external global i1
+@True = external global i1
+
 declare i1 @and(i1, i1)
 
 declare i1 @or(i1, i1)
@@ -15,7 +18,8 @@ declare i32 @putchar(i32)
 
 define i32 @main() {
 entry:
-  br i1 true, label %then, label %else
+  %load_if_cond = load i1, i1* @True
+  br i1 %load_if_cond, label %then, label %else
 
 then:                                             ; preds = %entry
   br i1 true, label %then1, label %else2

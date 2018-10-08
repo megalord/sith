@@ -24,8 +24,8 @@ entry:
   store i32 %0, i32* %line
   %pos = getelementptr %Atom, %Atom* %Atom, i32 0, i32 1
   store i32 %1, i32* %pos
-  %load = load %Atom, %Atom* %Atom
-  ret %Atom %load
+  %load_product_constructor_return = load %Atom, %Atom* %Atom
+  ret %Atom %load_product_constructor_return
 }
 
 define i32 @line(%Atom) {

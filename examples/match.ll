@@ -1,6 +1,9 @@
 ; ModuleID = 'examples/match'
 source_filename = "examples/match"
 
+@False = external global i1
+@True = external global i1
+
 declare i32 @puts(i8*)
 
 declare i32 @putchar(i32)
@@ -15,7 +18,8 @@ declare i1 @eq(i8, i8)
 
 define i32 @main() {
 entry:
-  switch i1 false, label %else [
+  %load_match_cond = load i1, i1* @False
+  switch i1 %load_match_cond, label %else [
     i1 true, label %pat_0
     i1 false, label %pat_1
   ]

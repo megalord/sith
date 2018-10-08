@@ -48,6 +48,10 @@ int main (int argc, char** argv) {
     return 0;
   }
 
+  if (codegen_init() != 0) {
+    return 1;
+  }
+
   if (module_compile(&module) != 0) {
     return 1;
   }

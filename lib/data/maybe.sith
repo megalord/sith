@@ -1,0 +1,15 @@
+(include "data/bool")
+
+(deftype (Maybe a) (+ (Just a) None))
+
+;(: none? (-> (Maybe a) Bool))
+;(defun (none? m)
+;  (match m
+;    ((Just x) False)
+;    (None     True)))
+
+;; bind_maybe_a
+;(defun (>= a f)
+;  (match a
+;    ((Just x) (f x))
+;    (None None)))

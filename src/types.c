@@ -165,11 +165,12 @@ int parse_type_sum (module_t* mod, type_t* type, node_t* node) {
         field = type_new();
         field->name = sub_node->atom->name;
         field->meta = TYPE_FUNC;
-        field->is_template = 0;
-        field->num_fields = node->list->len - 1;
+        field->is_template = type->is_template;
+        field->num_fields = node->list->len;
         field->field_names = NULL;
-        type->fields = malloc(field->num_fields * sizeof(type_t*));
-        for (int j = 0; j < field->num_fields; j++) {
+        field->fields = malloc(field->num_fields * sizeof(type_t*));
+        int j;
+        for (j = 0; j < field->num_fields - 1; j++) {
           sub_node = sub_node->next;
           if (sub_node->type != NODE_ATOM) {
             fprintf(stderr, "invalid sum type\n");
@@ -177,15 +178,16 @@ int parse_type_sum (module_t* mod, type_t* type, node_t* node) {
           }
           if (strlen(sub_node->atom->name) == 1 && islower(sub_node->atom->name[0])) {
             // TODO: lookup name
-            field->fields[i] = TYPE_POLY;
+            field->fields[j] = TYPE_POLY;
           } else {
-            field->fields[i] = type_find(mod, sub_node);
+            field->fields[j] = type_find(mod, sub_node);
             if (field->fields[i] == NULL) {
               fprintf(stderr, "type %s not found\n", sub_node->atom->name);
               return 1;
             }
           }
         }
+        field->fields[j] = type;
         break;
     }
     type->fields[i] = field;
@@ -293,64 +295,79 @@ type_t* module_type_find (module_t* mod, char* name, int* i0, int* j0, int* k0) 
   return NULL;
 }
 
-type_t* type_sum_constructor (type_t* sum) {
+type_t* type_sum_constructor (type_t* field, type_t* sum) {
+  if (field == NULL) {
+    return sum;
+  }
   type_t* type = type_new();
-  type->name = sum->name;
+  type->name = field->name;
   type->meta = TYPE_FUNC;
   type->is_template = 0;
   type->field_names = NULL;
-  type->num_fields = sum->num_fields + 1;
-  type->fields = malloc(type->num_fields * sizeof(type_t*));
+  type->num_fields = field->num_fields + 1;
+  type->fields = malloc(field->num_fields * sizeof(type_t*));
   int i;
   for (i = 0; i < sum->num_fields; i++) {
-    type->fields[i] = sum->fields[i];
+    type->fields[i] = field->fields[i];
   }
   type->fields[i] = sum;
   return type;
 }
 
-type_t* type_sum_getter (type_t* field, type_t* sum) {
+int type_sum_index (type_t* sum, char* field_name) {
+  assert(sum->meta == TYPE_SUM);
+  for (int i = 0; i < sum->num_fields; i++) {
+    if (strcmp(sum->field_names[i], field_name) == 0) {
+      return i;
+    }
+  }
+  fprintf(stderr, "unknown sum type field %s\n", field_name);
+  assert(0);
+}
+
+type_t* type_product_constructor (type_t* product) {
+  type_t* type = type_new();
+  type->name = product->name;
+  type->meta = TYPE_FUNC;
+  type->is_template = 0;
+  type->field_names = NULL;
+  type->num_fields = product->num_fields + 1;
+  type->fields = malloc(type->num_fields * sizeof(type_t*));
+  int i;
+  for (i = 0; i < product->num_fields; i++) {
+    type->fields[i] = product->fields[i];
+  }
+  type->fields[i] = product;
+  return type;
+}
+
+type_t* type_product_getter (type_t* field, type_t* product) {
   type_t* type = type_new();
   type->meta = TYPE_FUNC;
   type->is_template = 0;
   type->field_names = NULL;
   type->num_fields = 2;
   type->fields = malloc(type->num_fields * sizeof(type_t*));
-  type->fields[0] = sum;
+  type->fields[0] = product;
   type->fields[1] = field;
   return type;
 }
 
 int type_add_constructors (module_t* mod, type_t* type) {
-  int has_data = 0;
-  val_t val = { .type = type };
+  val_t val = {};
   switch (type->meta) {
     case TYPE_SUM:
       for (int i = 0; i < type->num_fields; i++) {
-        if (type->fields[0] != NULL) {
-          has_data = 1;
-          break;
-        }
-      }
-      if (has_data) {
-        for (int i = 0; i < type->num_fields; i++) {
-          val.type = type->fields[i];
-          //val.fields; // TODO ???
-          symbol_table_add(&mod->table, type->field_names[i], &val);
-        }
-      } else {
-        for (int i = 0; i < type->num_fields; i++) {
-          val.data = malloc(sizeof(int));
-          *(int*)val.data = i;
-          symbol_table_add(&mod->table, type->field_names[i], &val);
-        }
+        val.type = (type->fields[i] == NULL) ? type : type->fields[i];
+        //val.type = type_sum_constructor(type->fields[i], type);
+        symbol_table_add(&mod->table, type->field_names[i], &val);
       }
       return 0;
     case TYPE_PRODUCT:
-      val.type = type_sum_constructor(type);
+      val.type = type_product_constructor(type);
       symbol_table_add(&mod->table, type->name, &val);
       for (int i = 0; i < type->num_fields; i++) {
-        val.type = type_sum_getter(type->fields[i], type);
+        val.type = type_product_getter(type->fields[i], type);
         val.type->name = type->field_names[i];
         symbol_table_add(&mod->table, type->field_names[i], &val);
       }
