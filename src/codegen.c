@@ -487,6 +487,10 @@ int module_compile (module_t* mod) {
     }
     dep_table = mod->deps[i]->table;
     for (int j = 0; j < dep_table.num_symbols; j++) {
+      if (dep_table.values[j].type->is_template == 1) {
+        continue;
+      }
+
       if (dep_table.values[j].type->meta == TYPE_FUNC) {
         LLVMAddFunction(mod->llvm, dep_table.names[j], LLVMGetElementType(LLVMTypeOf(dep_table.values[j].llvm)));
       } else {
@@ -638,12 +642,11 @@ int exec_main (module_t* mod) {
     exit(EXIT_FAILURE);
   }
 
-  val_t* main = symbol_table_get(&mod->table, (char*)"main");
-  if (main != NULL) {
-    int (*fn)(void) = LLVMGetPointerToGlobal(engine, main->llvm);
-    return (*fn)();
-  } else {
+  found_val_t res;
+  if (symbol_table_get(&mod->table, (char*)"main", NULL, &res) != 0) {
     fprintf(stderr, "no main function\n");
     return 1;
   }
+  int (*fn)(void) = LLVMGetPointerToGlobal(engine, res.val->llvm);
+  return (*fn)();
 }

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "debug.h"
 #include "lexer.h"
 #include "parser.h"
 
@@ -29,19 +30,16 @@ int type_matches_node (type_t* type, node_t* node);
 type_t* type_find (module_t* mod, node_t* node);
 type_t* module_type_find (module_t* mod, char* name, int* i0, int* j0, int* k0);
 
-int parse_type (module_t* mod, node_t* node, type_t* type) {
-  type->is_template = 0;
-  if (node->type == NODE_LIST) {
-    type->is_template = 1;
-    // do something with parameter names
-  }
-  node = node->next;
 
+int parse_type (module_t* mod, node_t* node, type_t* type) {
   type->field_names = NULL;
   switch (node->type) {
     case NODE_ATOM:
-      type->meta = TYPE_ALIAS;
       type->num_fields = 1;
+      if (islower(node->atom->name[0])) {
+        type->fields = &TYPE_POLY;
+        break;
+      }
       type_t* field = type_find(mod, node);
       if (field == NULL) {
         fprintf(stderr, "type %s not found\n", node->atom->name);
@@ -163,31 +161,17 @@ int parse_type_sum (module_t* mod, type_t* type, node_t* node) {
         }
         type->field_names[i] = sub_node->atom->name;
         field = type_new();
-        field->name = sub_node->atom->name;
-        field->meta = TYPE_FUNC;
-        field->is_template = type->is_template;
-        field->num_fields = node->list->len;
-        field->field_names = NULL;
-        field->fields = malloc(field->num_fields * sizeof(type_t*));
-        int j;
-        for (j = 0; j < field->num_fields - 1; j++) {
-          sub_node = sub_node->next;
-          if (sub_node->type != NODE_ATOM) {
-            fprintf(stderr, "invalid sum type\n");
+
+        sub_node = sub_node->next;
+        if (node->list->len == 2) {
+          if (parse_type(mod, sub_node, field) != 0) {
             return 1;
           }
-          if (strlen(sub_node->atom->name) == 1 && islower(sub_node->atom->name[0])) {
-            // TODO: lookup name
-            field->fields[j] = TYPE_POLY;
-          } else {
-            field->fields[j] = type_find(mod, sub_node);
-            if (field->fields[i] == NULL) {
-              fprintf(stderr, "type %s not found\n", sub_node->atom->name);
-              return 1;
-            }
-          }
+        } else {
+          // all must be atoms
+          fprintf(stderr, "invalid sum type, too many values for constructor %s\n", type->field_names[i]);
+          return 1;
         }
-        field->fields[j] = type;
         break;
     }
     type->fields[i] = field;
@@ -300,14 +284,13 @@ type_t* type_sum_constructor (type_t* field, type_t* sum) {
     return sum;
   }
   type_t* type = type_new();
-  type->name = field->name;
   type->meta = TYPE_FUNC;
-  type->is_template = 0;
+  type->is_template = sum->is_template;
   type->field_names = NULL;
   type->num_fields = field->num_fields + 1;
-  type->fields = malloc(field->num_fields * sizeof(type_t*));
+  type->fields = malloc(type->num_fields * sizeof(type_t*));
   int i;
-  for (i = 0; i < sum->num_fields; i++) {
+  for (i = 0; i < type->num_fields - 1; i++) {
     type->fields[i] = field->fields[i];
   }
   type->fields[i] = sum;
@@ -329,7 +312,7 @@ type_t* type_product_constructor (type_t* product) {
   type_t* type = type_new();
   type->name = product->name;
   type->meta = TYPE_FUNC;
-  type->is_template = 0;
+  type->is_template = product->is_template;
   type->field_names = NULL;
   type->num_fields = product->num_fields + 1;
   type->fields = malloc(type->num_fields * sizeof(type_t*));
@@ -344,7 +327,7 @@ type_t* type_product_constructor (type_t* product) {
 type_t* type_product_getter (type_t* field, type_t* product) {
   type_t* type = type_new();
   type->meta = TYPE_FUNC;
-  type->is_template = 0;
+  type->is_template = product->is_template;
   type->field_names = NULL;
   type->num_fields = 2;
   type->fields = malloc(type->num_fields * sizeof(type_t*));
@@ -358,8 +341,7 @@ int type_add_constructors (module_t* mod, type_t* type) {
   switch (type->meta) {
     case TYPE_SUM:
       for (int i = 0; i < type->num_fields; i++) {
-        val.type = (type->fields[i] == NULL) ? type : type->fields[i];
-        //val.type = type_sum_constructor(type->fields[i], type);
+        val.type = type_sum_constructor(type->fields[i], type);
         symbol_table_add(&mod->table, type->field_names[i], &val);
       }
       return 0;
@@ -380,7 +362,6 @@ int type_add_constructors (module_t* mod, type_t* type) {
   }
 }
 
-/*
 type_t* type_add_instance (module_t* mod, type_t* src, type_t* fields) {
   type_t* instance = module_type_new(mod);
   instance->name = src->name;
@@ -389,7 +370,33 @@ type_t* type_add_instance (module_t* mod, type_t* src, type_t* fields) {
   for (int i = 0; i < src->num_fields; i++) {
     instance->fields[i] = *src->fields + i;
   }
-  instance->fields = &fields;
+  //instance->fields = &fields;
+  type_add_constructors(mod, instance);
   return instance;
 }
-*/
+
+int type_eq (type_t* a, type_t* b) {
+  if (a == b) {
+    return 1;
+  }
+
+  if (a == NULL || b == NULL) {
+    return 0;
+  }
+
+  if (a == TYPE_POLY || b == TYPE_POLY) {
+    return 2;
+  }
+
+  if (a->meta != b->meta || a->num_fields != b->num_fields) {
+    return 0;
+  }
+
+  for (int i = 0; i < a->num_fields; i++) {
+    if (type_eq(a->fields[i], b->fields[i]) == 0) {
+      return 0;
+    }
+  }
+
+  return (a->is_template || b->is_template) ? 2 : 1;
+}

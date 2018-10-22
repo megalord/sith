@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "debug.h"
 #include "lexer.h"
 #include "parser.h"
 
@@ -210,13 +211,50 @@ int parse_progn (module_t* module, symbol_table_t* table, node_t* node, expr_t* 
   return 0;
 }
 
+int parse_match_destructure (module_t* module, symbol_table_t* table, node_t* node, type_t* ret, expr_t* pat, symbol_table_t** let_table) {
+  if (node->list->len != 2) {
+    fprintf(stderr, "invalid match: expected constructor list length 2, got %d\n", node->list->len);
+    return 1;
+  }
+  int num_vars = node->list->len - 1;
+
+  node = node->list->fst;
+  if (node->type != NODE_ATOM) {
+    fprintf(stderr, "invalid match: pattern constructor is list\n");
+    return 1;
+  }
+
+  pat->fn_name = node->atom->name;
+  // TODO: use ret
+  if (find_fn(module, table, pat->fn_name, NULL, &pat->fn) != 0) {
+    return 1;
+  }
+  if (pat->fn->type->num_fields - 1 != num_vars) {
+    fprintf(stderr, "expected function %s to have %d fields, got %d\n", pat->fn_name, num_vars, pat->fn->type->num_fields - 1);
+    return 1;
+  }
+
+  *let_table = symbol_table_new(table, num_vars);
+  for (int i = 0; i < num_vars; i++) {
+    node = node->next;
+    if (node->type != NODE_ATOM) {
+      fprintf(stderr, "invalid match: pattern value is list\n");
+      return 1;
+    }
+
+    (*let_table)->names[i] = node->atom->name;
+    (*let_table)->values[i].type = pat->fn->type->fields[i];
+  }
+  return 0;
+}
+
 int parse_match (module_t* module, symbol_table_t* table, node_t* node, expr_t* expr) {
   if (parse_expr(module, table, node, expr->match_cond) != 0) {
     return 1;
   }
 
   if (expr->match_cond->type->meta != TYPE_SUM) {
-    fprintf(stderr, "invalid match: can only match on sum type\n");
+    fprintf(stderr, "invalid match: can only match on sum type, got %d\n", expr->match_cond->type->meta);
     return 1;
   }
 
@@ -230,30 +268,37 @@ int parse_match (module_t* module, symbol_table_t* table, node_t* node, expr_t* 
       return 1;
     }
     sub_node = node->list->fst;
-    if (parse_expr(module, table, sub_node, curr_pat) != 0) {
-      return 1;
-    }
-    if (curr_pat->form != EXPR_VAR && curr_pat->form != EXPR_FUNCALL) {
-      fprintf(stderr, "invalid match: pattern must be var or funcall, got %d\n", curr_pat->form);
-      return 1;
-    }
-    if (curr_pat->type != expr->match_cond->type) {
-      fprintf(stderr, "invalid match: pattern type does not fit condition\n");
-      return 1;
+    if (sub_node->type == NODE_ATOM) {
+      curr_pat->form = EXPR_VAR;
+      curr_pat->var_name = sub_node->atom->name;
+      if (find_var(module, table, curr_pat->var_name, NULL, &curr_pat->var) != 0) {
+        return 1;
+      }
+      if (parse_expr(module, table, sub_node->next, curr_body) != 0) {
+        return 1;
+      }
+      curr_pat->type = curr_pat->var->type;
+    } else {
+      curr_pat->form = EXPR_FUNCALL;
+      curr_body->form = EXPR_LET;
+      if (parse_match_destructure(module, table, sub_node, expr->match_cond->type, curr_pat, &curr_body->let_table) != 0) {
+        return 1;
+      }
+      curr_pat->type = curr_pat->fn->type->fields[curr_pat->fn->type->num_fields - 1];
+      curr_body->let_body = expr_new();
+      if (parse_expr(module, curr_body->let_table, sub_node->next, curr_body->let_body) != 0) {
+        return 1;
+      }
     }
 
-    sub_node = sub_node->next;
-    if (curr_pat->form == EXPR_FUNCALL) {
-      curr_body->form = EXPR_LET;
-      curr_body->let_body = expr_new();
-      curr_body->let_table = symbol_table_new(table, curr_pat->num_params);
-      if (parse_expr(module, table, sub_node, curr_body->let_body) != 0) {
-        return 1;
-      }
-    } else {
-      if (parse_expr(module, table, sub_node, curr_body) != 0) {
-        return 1;
-      }
+    if (curr_pat->type != expr->match_cond->type) {
+      fprintf(stderr, "invalid match: pattern type does not fit condition\n");
+      printf("wanted: ");
+      type_print(expr->match_cond->type);
+      printf(", got: ");
+      type_print(curr_pat->type);
+      puts("");
+      return 1;
     }
 
     curr_pat++;
@@ -264,17 +309,28 @@ int parse_match (module_t* module, symbol_table_t* table, node_t* node, expr_t* 
 
 int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t* expr) {
   expr->fn_name = list->fst->atom->name;
-  expr->fn = symbol_table_get(table, expr->fn_name);
-  if (expr->fn == NULL) {
-    expr->fn = module_deps_symbol_find(module, expr->fn_name);
+  expr->num_params = list->len - 1;
+  expr->params = expr_new_i(expr->num_params);
+
+  type_t type = { .meta = TYPE_FUNC, .is_template = 0, .num_fields = expr->num_params + 1 };
+  type.fields = malloc(type.num_fields * sizeof(type_t*));
+  node_t* node = list->fst->next;
+  int i;
+  for (i = 0; i < expr->num_params; i++) {
+    if (parse_expr(module, table, node, expr->params + i) != 0) {
+      return 1;
+    }
+    type.fields[i] = expr->params[i].type;
+    node = node->next;
   }
-  if (expr->fn == NULL) {
-    fprintf(stderr, "symbol %s not found (%d:%d)\n", expr->fn_name, list->fst->atom->line, list->fst->atom->pos);
+  type.fields[i] = TYPE_POLY;
+
+  if (find_fn(module, table, expr->fn_name, &type, &expr->fn) != 0) {
     return 1;
   }
-  if (expr->fn->type->meta != TYPE_FUNC) {
-    fprintf(stderr, "%s is not a function\n", expr->fn_name);
-    return 1;
+
+  if (expr->fn->type->is_template == 1) {
+    fprintf(stderr, "%s is a template function\n", expr->fn_name);
   }
 
   expr->num_params = list->len - 1;
@@ -283,16 +339,6 @@ int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t
     return 1;
   }
 
-  expr->params = expr_new_i(expr->num_params);
-
-  expr_t* curr;
-  node_t* node = list->fst->next;
-  for (curr = expr->params; curr < expr->params + expr->num_params; curr++) {
-    if (parse_expr(module, table, node, curr) != 0) {
-      return 1;
-    }
-    node = node->next;
-  }
   expr->type = expr->fn->type->fields[expr->fn->type->num_fields - 1];
   return 0;
 }
@@ -303,12 +349,7 @@ int parse_expr (module_t* module, symbol_table_t* table, node_t* node, expr_t* e
       if (node->atom->type == ATOM_IDENTIFIER) {
         expr->form = EXPR_VAR;
         expr->var_name = node->atom->name;
-        expr->var = symbol_table_get(table, expr->var_name);
-        if (expr->var == NULL) {
-          expr->var = module_deps_symbol_find(module, expr->var_name);
-        }
-        if (expr->var == NULL) {
-          fprintf(stderr, "var %s not found\n", expr->var_name);
+        if (find_var(module, table, node->atom->name, NULL, &expr->var) != 0) {
           return 1;
         }
         if (expr->var->type->meta == TYPE_FUNC) {
@@ -374,16 +415,11 @@ int parse_defun (module_t* module, symbol_table_t* table, node_t* node) {
     return 1;
   }
   char* fn_name = sig_node->list->fst->atom->name;
-  val_t* val = symbol_table_get(table, fn_name);
-  if (val == NULL) {
-    fprintf(stderr, "no type signature found for %s\n", fn_name);
+  val_t* fn;
+  if (find_fn(module, table, fn_name, NULL, &fn) != 0) {
     return 1;
   }
-  type_t* type = val->type;
-  if (type->meta != TYPE_FUNC) {
-    fprintf(stderr, "%s is not a function\n", fn_name);
-    return 1;
-  }
+  type_t* type = fn->type;
   if (type->num_fields != sig_node->list->len) {
     fprintf(stderr, "%s definition does not match type signature\n", fn_name);
     return 1;
@@ -393,7 +429,7 @@ int parse_defun (module_t* module, symbol_table_t* table, node_t* node) {
   expr->form = EXPR_LET;
   expr->let_body = expr_new();
   expr->let_table = symbol_table_new(table, type->num_fields - 1);
-  val->body = expr;
+  fn->body = expr;
 
   node_t* param_node = sig_node->list->fst->next; // skip function name
   for (int i = 0; i < type->num_fields - 1; i++) {
@@ -424,22 +460,49 @@ symbol_table_t* symbol_table_new (symbol_table_t* parent, int len) {
   symbol_table_t* table = malloc(sizeof(symbol_table_t));
   table->parent = parent;
   table->num_symbols = len;
-  table->max_symbols = len;
+  table->max_symbols = len == 0 ? 2 : len;
   table->names = malloc(sizeof(char*) * len);
   table->values = malloc(sizeof(val_t) * len);
   return table;
 }
 
-val_t* symbol_table_get (symbol_table_t* table, char* name) {
+int symbol_table_get (symbol_table_t* table, char* name, type_t* type, found_val_t* res) {
+  int type_eq_res;
+  val_t* template_match = NULL;
   for (int i = 0; i < table->num_symbols; i++) {
     if (strcmp(table->names[i], name) == 0) {
-      return table->values + i;
+      if (type == NULL) {
+        res->table = table;
+        res->val = table->values + i;
+        return 0;
+      } else {
+        type_eq_res = type_eq(table->values[i].type, type);
+        switch (type_eq_res) {
+          case 0:
+            continue;
+          case 1:
+            res->table = table;
+            res->val = table->values + i;
+            return 0;
+          case 2:
+            template_match = table->values + i;
+            break;
+          default:
+            fprintf(stderr, "symbol_table_get/type_eq unexpected result: %d\n", type_eq_res);
+            return 1;
+        }
+      }
     }
   }
-  if (table->parent != NULL) {
-    return symbol_table_get(table->parent, name);
+  if (template_match) {
+    res->table = table;
+    res->val = template_match;
+    return 0;
   }
-  return NULL;
+  if (table->parent != NULL) {
+    return symbol_table_get(table->parent, name, type, res);
+  }
+  return 1;
 }
 
 val_t* symbol_table_add (symbol_table_t* table, char* name, val_t* val) {
@@ -461,15 +524,46 @@ val_t* symbol_table_add (symbol_table_t* table, char* name, val_t* val) {
   return copy;
 }
 
-val_t* module_deps_symbol_find (module_t *mod, char* name) {
-  val_t* val;
+int module_deps_symbol_find (module_t *mod, char* name, type_t* type, found_val_t* res) {
   for (int i = 0; i < mod->num_deps; i++) {
-    val = symbol_table_get(&(*mod->deps[i]).table, name);
-    if (val != NULL) {
-      return val;
+    if (symbol_table_get(&(mod->deps[i]->table), name, type, res) == 0) {
+      res->module = mod->deps[i];
+      return 0;
     }
   }
-  return NULL;
+  return 1;
+}
+
+int find_var (module_t* module, symbol_table_t* table, char* name, type_t* type, val_t** var) {
+  found_val_t res = { .module = module };
+  if (symbol_table_get(table, name, type, &res) != 0 && module_deps_symbol_find(module, name, type, &res) != 0) {
+    fprintf(stderr, "var %s not found\n", name);
+    return 1;
+  }
+  *var = res.val;
+  return 0;
+}
+
+int find_fn (module_t* module, symbol_table_t* table, char* name, type_t* type, val_t** fn) {
+  found_val_t res = { .module = module };
+  if (symbol_table_get(table, name, type, &res) != 0 && module_deps_symbol_find(module, name, type, &res) != 0) {
+    fprintf(stderr, "fn %s not found\n", name);
+    if (type != NULL) {
+      type_print(type);
+      puts("");
+    }
+    return 1;
+  }
+  if (res.val->type->meta != TYPE_FUNC) {
+    fprintf(stderr, "%s is not a function\n", name);
+    return 1;
+  }
+  if (res.val->type->is_template == 1) {
+    fprintf(stderr, "%s is a template function\n", name);
+    //type_add_instance(res.mod, res.val->type);
+  }
+  *fn = res.val;
+  return 0;
 }
 
 int module_cache_init () {
@@ -552,6 +646,9 @@ int module_setup (module_t* module, node_t* root) {
   module->deps[0] = &MODULE_BUILTIN;
   module->types = malloc(module->num_types * sizeof(type_t));
   module->table.max_symbols = module->table.num_symbols;
+  if (module->table.max_symbols == 0) {
+    module->table.max_symbols = 5;
+  }
   module->table.names = malloc(module->table.max_symbols * sizeof(char*));
   module->table.values = malloc(module->table.max_symbols * sizeof(val_t));
   return 0;
@@ -583,12 +680,17 @@ int module_parse_node (node_t* root, module_t* module) {
         dep++;
       } else if (strcmp(name, "deftype") == 0) {
         node_t* name_node = node->list->fst->next;
-        if (name_node->type != NODE_ATOM && name_node->list->fst->type != NODE_ATOM) {
+        if (name_node->type == NODE_ATOM) {
+          module->types[i_type].name = name_node->atom->name;
+          module->types[i_type].is_template = 0;
+        } else if (name_node->list->fst->type == NODE_ATOM) {
+          module->types[i_type].name = name_node->list->fst->atom->name;
+          module->types[i_type].is_template = 1;
+        } else {
           fprintf(stderr, "invalid type name\n");
           return 1;
         }
-        module->types[i_type].name = (name_node->type == NODE_ATOM) ? name_node->atom->name : name_node->list->fst->atom->name;
-        if (parse_type(module, name_node, module->types + i_type) != 0) {
+        if (parse_type(module, name_node->next, module->types + i_type) != 0) {
           return 1;
         }
         i_type++;
@@ -596,7 +698,8 @@ int module_parse_node (node_t* root, module_t* module) {
         module->table.names[i_sym] = node->list->fst->next->atom->name;
         sym->type = type_new();
         sym->type->name = NULL;
-        if (parse_type(module, node->list->fst->next, sym->type) != 0) {
+        sym->type->is_template = 0;
+        if (parse_type(module, node->list->fst->next->next, sym->type) != 0) {
           return 1;
         }
         if (sym->type->meta == TYPE_FUNC) {

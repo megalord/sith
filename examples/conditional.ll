@@ -10,7 +10,7 @@ declare i1 @or(i1, i1)
 
 declare i1 @not(i1)
 
-declare i1 @eq(i8, i8)
+declare i1 @eq(i1, i1)
 
 declare i32 @puts(i8*)
 

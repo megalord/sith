@@ -4,5 +4,5 @@
 (: or (-> Bool Bool Bool))
 (: not (-> Bool Bool))
 
-(: eq (-> I8 I8 Bool))
+(: eq (-> Bool Bool Bool))
 ;(: eq (-> a a Bool))

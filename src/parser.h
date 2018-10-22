@@ -119,6 +119,12 @@ typedef struct {
   module_t* modules;
 } module_cache_t;
 
+typedef struct {
+  val_t* val;
+  symbol_table_t* table;
+  module_t* module;
+} found_val_t;
+
 type_t* TYPE_POLY;
 type_t* TYPE_I8;
 type_t* TYPE_I32;
@@ -130,6 +136,7 @@ type_t* type_new ();
 
 int type_sum_index (type_t* sum, char* field_name);
 int type_add_constructors (module_t* mod, type_t* type);
+int type_eq (type_t* a, type_t* b);
 int parse_type (module_t* module, node_t* node, type_t* type);
 int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* val);
 int parse_if (module_t* module, symbol_table_t* table, list_t* list, expr_t* expr);
@@ -140,9 +147,11 @@ int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t
 int parse_expr (module_t* module, symbol_table_t* table, node_t* node, expr_t* expr);
 int parse_defun (module_t* module, symbol_table_t* table, node_t* node);
 symbol_table_t* symbol_table_new (symbol_table_t* parent, int len);
-val_t* symbol_table_get (symbol_table_t* table, char* name);
+int symbol_table_get (symbol_table_t* table, char* name, type_t* type, found_val_t* res);
 val_t* symbol_table_add (symbol_table_t* table, char* name, val_t* val);
-val_t* module_deps_symbol_find (module_t *mod, char* name);
+int module_deps_symbol_find (module_t *mod, char* name, type_t* type, found_val_t* res);
+int find_var (module_t* module, symbol_table_t* table, char* name, type_t* type, val_t** var);
+int find_fn (module_t* module, symbol_table_t* table, char* name, type_t* type, val_t** var);
 int module_cache_init ();
 int module_parse_file (char* filename, module_t* module);
 module_t* module_load (char* filename);

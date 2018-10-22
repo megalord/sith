@@ -73,16 +73,16 @@ void type_print (type_t* type) {
         if (i != 0) {
           printf(" | ");
         }
-        if (type->field_names[i] != NULL) {
-          printf("%s", type->field_names[i]);
-        } else {
+        if (type->fields[i] != NULL) {
           type_print(type->fields[i]);
+        } else {
+          printf("%s", type->field_names[i]);
         }
       }
       printf(" }");
       break;
     default:
-      printf("???");
+      printf("?%d?", type->meta);
       break;
   }
 }
@@ -93,7 +93,7 @@ void val_print (char* name, val_t* val, int depth) {
 }
 
 void symbol_table_print (symbol_table_t* table, int depth) {
-  printf("TABLE (%d):\n", table->num_symbols);
+  printf("TABLE %p (%d/%d):\n", (void*)table, table->num_symbols, table->max_symbols);
   for (int i = 0; i < table->num_symbols; i++) {
     val_print(table->names[i], table->values + i, depth);
     printf("\n");
