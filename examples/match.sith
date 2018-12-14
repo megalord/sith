@@ -1,10 +1,10 @@
 (include "c/stdio")
-(include "data/bool")
+(include "data/maybe")
 
 (: main (-> I32))
 (defun (main)
-  (let ((val False))
+  (let ((val (Just 74)))
     (match val
-      (True  (puts "true"))
-      (False (puts "false")))
+      ((Just i) (putchar i))
+      (None     (puts "none")))
     0))

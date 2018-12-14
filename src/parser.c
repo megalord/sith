@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -117,6 +118,10 @@ int parse_let (module_t* module, symbol_table_t* parent, list_t* list, expr_t* e
       fprintf(stderr, "invalid let variable name\n");
       return 1;
     }
+    if (!islower(sub_node->atom->name[0])) {
+      fprintf(stderr, "invalid variable name %s; must begin with lowercase letter\n", sub_node->atom->name);
+      return 1;
+    }
 
     table->names[i] = sub_node->atom->name;
     sub_node = sub_node->next;
@@ -225,8 +230,17 @@ int parse_match_destructure (module_t* module, symbol_table_t* table, node_t* no
   }
 
   pat->fn_name = node->atom->name;
-  // TODO: use ret
-  if (find_fn(module, table, pat->fn_name, NULL, &pat->fn) != 0) {
+
+  type_t type = { .meta = TYPE_FUNC, .is_template = 0, .num_fields = num_vars + 1 };
+  type.fields = malloc(type.num_fields * sizeof(type_t*));
+  int i;
+  for (i = 0; i < num_vars; i++) {
+    type.fields[i] = NULL;
+  }
+  type.fields[i] = ret;
+
+  if (find_fn(module, table, pat->fn_name, &type, &pat->fn) != 0) {
+    fprintf(stderr, "no function found found for match\n");
     return 1;
   }
   if (pat->fn->type->num_fields - 1 != num_vars) {
@@ -326,6 +340,7 @@ int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t
   type.fields[i] = TYPE_POLY;
 
   if (find_fn(module, table, expr->fn_name, &type, &expr->fn) != 0) {
+    fprintf(stderr, "no function found found for funcall\n");
     return 1;
   }
 
@@ -415,6 +430,10 @@ int parse_defun (module_t* module, symbol_table_t* table, node_t* node) {
     return 1;
   }
   char* fn_name = sig_node->list->fst->atom->name;
+  if (!islower(fn_name[0])) {
+    fprintf(stderr, "invalid function name %s; must begin with lowercase letter\n", fn_name);
+    return 1;
+  }
   val_t* fn;
   if (find_fn(module, table, fn_name, NULL, &fn) != 0) {
     return 1;
@@ -435,6 +454,10 @@ int parse_defun (module_t* module, symbol_table_t* table, node_t* node) {
   for (int i = 0; i < type->num_fields - 1; i++) {
     if (param_node->type != NODE_ATOM || param_node->atom->type != ATOM_IDENTIFIER) {
       fprintf(stderr, "Function parameter arguments must be atoms");
+      return 1;
+    }
+    if (!islower(param_node->atom->name[0])) {
+      fprintf(stderr, "invalid argument name %s; must begin with lowercase letter\n", param_node->atom->name);
       return 1;
     }
     expr->let_table->names[i] = param_node->atom->name;
@@ -534,6 +557,21 @@ int module_deps_symbol_find (module_t *mod, char* name, type_t* type, found_val_
   return 1;
 }
 
+int check_for_constructor (char* name, type_t* type, found_val_t* res) {
+  if (res->val->type->is_template == 1 && isupper(name[0])) {
+    if (type == NULL) {
+      fprintf(stderr, "%s is a template constructor function\n", name);
+      return 1;
+    } else if (type->is_template == 0) {
+      fprintf(stderr, "type_add_instance\n");
+      type_add_instance(res->module, res->val->type, type);
+      return 1;
+      //return find_fn(res.module, res.table, name, type, fn);
+    }
+  }
+  return 0;
+}
+
 int find_var (module_t* module, symbol_table_t* table, char* name, type_t* type, val_t** var) {
   found_val_t res = { .module = module };
   if (symbol_table_get(table, name, type, &res) != 0 && module_deps_symbol_find(module, name, type, &res) != 0) {
@@ -552,6 +590,7 @@ int find_fn (module_t* module, symbol_table_t* table, char* name, type_t* type, 
       type_print(type);
       puts("");
     }
+    module_print_follow(module);
     return 1;
   }
   if (res.val->type->meta != TYPE_FUNC) {
@@ -559,8 +598,22 @@ int find_fn (module_t* module, symbol_table_t* table, char* name, type_t* type, 
     return 1;
   }
   if (res.val->type->is_template == 1) {
-    fprintf(stderr, "%s is a template function\n", name);
-    //type_add_instance(res.mod, res.val->type);
+    if (type == NULL) {
+      fprintf(stderr, "%s is a template function\n", name);
+      return 1;
+    } else if (type->is_template == 0) {
+      fprintf(stderr, "BEGIN type_add_instance\n");
+      type_print(res.val->type);
+      module_print(res.module);
+      fprintf(stderr, "\nMIDDLE type_add_instance\n");
+      if (type_add_instance(res.module, res.val->type, type)) {
+        return 1;
+      }
+      module_print(res.module);
+      fprintf(stderr, "END type_add_instance\n");
+      return 1;
+      //return find_fn(res.module, res.table, name, type, fn);
+    }
   }
   *fn = res.val;
   return 0;
@@ -577,7 +630,8 @@ int module_cache_init () {
 
   type_t type;
   MODULE_BUILTIN.num_types = 5;
-  MODULE_BUILTIN.types = type_new_i(MODULE_BUILTIN.num_types);
+  MODULE_BUILTIN.max_types = 10;
+  MODULE_BUILTIN.types = type_new_i(MODULE_BUILTIN.max_types);
   type = (type_t) { .name = (char*)"POLY", .meta = TYPE_PRIM,  .num_fields = 0, .is_template = 0 };
   memcpy(MODULE_BUILTIN.types, &type, sizeof(type_t));
   TYPE_POLY = MODULE_BUILTIN.types;
@@ -621,7 +675,6 @@ int module_setup (module_t* module, node_t* root) {
   module->num_deps = 1;
   module->num_types = 0;
   module->table.num_symbols = 0;
-  module->table.max_symbols = 0;
   module->table.parent = NULL;
   if (root->type != NODE_LIST) {
     fprintf(stderr, "root node must be a list\n");
@@ -644,7 +697,9 @@ int module_setup (module_t* module, node_t* root) {
   }
   module->deps = malloc(module->num_deps * sizeof(module_t*));
   module->deps[0] = &MODULE_BUILTIN;
-  module->types = malloc(module->num_types * sizeof(type_t));
+  // TODO: be more efficient by finding all parametrized types
+  module->max_types = module->num_types * 2;
+  module->types = malloc(module->max_types * sizeof(type_t));
   module->table.max_symbols = module->table.num_symbols;
   if (module->table.max_symbols == 0) {
     module->table.max_symbols = 5;
@@ -679,6 +734,7 @@ int module_parse_node (node_t* root, module_t* module) {
         }
         dep++;
       } else if (strcmp(name, "deftype") == 0) {
+        // parse_deftype(module, node, module->types + i_type);
         node_t* name_node = node->list->fst->next;
         if (name_node->type == NODE_ATOM) {
           module->types[i_type].name = name_node->atom->name;

@@ -10,5 +10,6 @@ void type_print (type_t* type);
 void val_print (char* name, val_t* val, int depth);
 void symbol_table_print (symbol_table_t* table, int depth);
 void module_print (module_t* module);
+void module_print_follow (module_t* module);
 
 #endif

@@ -103,6 +103,14 @@ typedef struct symbol_table_t {
   struct val_t* values;
 } symbol_table_t;
 
+typedef struct type_table_t {
+  int num_instances;
+  int max_instances;
+  type_t* instances;
+  int num_types;
+  type_t* types;
+} type_table_t;
+
 struct module_t;
 typedef struct module_t {
   char* name;
@@ -136,6 +144,7 @@ type_t* type_new ();
 
 int type_sum_index (type_t* sum, char* field_name);
 int type_add_constructors (module_t* mod, type_t* type);
+int type_add_instance (module_t* mod, type_t* src, type_t* desired);
 int type_eq (type_t* a, type_t* b);
 int parse_type (module_t* module, node_t* node, type_t* type);
 int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* val);

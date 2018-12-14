@@ -36,3 +36,6 @@ ir: main
 		echo "./main buildir $$f"; \
 		./main buildir $$f; \
 	done
+
+setup:
+	ln -s ./lib /usr/local/lib/sith
