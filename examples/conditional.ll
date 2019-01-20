@@ -4,14 +4,6 @@ source_filename = "examples/conditional"
 @False = external global i1
 @True = external global i1
 
-declare i1 @and(i1, i1)
-
-declare i1 @or(i1, i1)
-
-declare i1 @not(i1)
-
-declare i1 @eq(i1, i1)
-
 declare i32 @puts(i8*)
 
 declare i32 @putchar(i32)

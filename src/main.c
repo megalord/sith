@@ -44,7 +44,12 @@ int main (int argc, char** argv) {
   }
 
   if (strcmp(argv[1], "parse") == 0) {
-    module_print(&module);
+    module_print(&module, 0);
+    return 0;
+  }
+
+  if (strcmp(argv[1], "ast") == 0) {
+    ast_print(&module, 0);
     return 0;
   }
 

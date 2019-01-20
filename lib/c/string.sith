@@ -1,0 +1,2 @@
+(: memcpy (-> (Ptr I8) (Ptr I8) Size))
+(: strncat (-> (Ptr I8) (Ptr I8) Size))

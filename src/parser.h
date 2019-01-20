@@ -4,10 +4,10 @@
 #include <llvm-c/Core.h>
 
 #include "lexer.h"
+#include "types.h"
 
 struct expr_t;
 struct symbol_table_t;
-struct type_t;
 struct val_t;
 struct val_list_t;
 
@@ -24,7 +24,7 @@ typedef enum {
 
 typedef struct expr_t {
   expr_form_t form;
-  struct type_t* type;
+  type_t* type;
   union {
     // EXPR_CONST
     struct { struct val_t* cnst; };
@@ -44,25 +44,6 @@ typedef struct expr_t {
     struct { char* var_name; struct val_t* var; };
   };
 } expr_t;
-
-typedef enum {
-  TYPE_ALIAS,
-  TYPE_PRIM,
-  TYPE_FUNC,
-  TYPE_PARAM,
-  TYPE_PRODUCT,
-  TYPE_SUM
-} meta_type_t;
-
-typedef struct type_t {
-  char* name;
-  meta_type_t meta;
-  int is_template; // for param type templates
-  int num_fields;
-  struct type_t** fields;
-  char** field_names; // for sum or product types
-  LLVMTypeRef llvm; // populated during compilation
-} type_t;
 
 typedef struct val_t {
   type_t* type;
@@ -110,6 +91,9 @@ typedef struct module_t {
   struct module_t** deps;
   int num_types;
   type_t* types;
+  int num_type_instances;
+  int max_type_instances;
+  type_t* type_instances;
   symbol_table_t table;
   LLVMModuleRef llvm;
 } module_t;
@@ -119,25 +103,11 @@ typedef struct {
   module_t* modules;
 } module_cache_t;
 
-typedef struct {
-  val_t* val;
-  symbol_table_t* table;
-  module_t* module;
-} found_val_t;
-
-type_t* TYPE_POLY;
-type_t* TYPE_I8;
-type_t* TYPE_I32;
-type_t* TYPE_PTR;
-type_t* TYPE_CSTR;
-
-type_t* type_new_i (int i);
-type_t* type_new ();
-
-int type_sum_index (type_t* sum, char* field_name);
-int type_add_constructors (module_t* mod, type_t* type);
-int type_eq (type_t* a, type_t* b);
 int parse_type (module_t* module, node_t* node, type_t* type);
+int parse_type_func (module_t* mod, type_t* type, node_t* node);
+int parse_type_sum (module_t* mod, type_t* type, node_t* node);
+int parse_type_product (module_t* mod, type_t* type, node_t* node);
+
 int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* val);
 int parse_if (module_t* module, symbol_table_t* table, list_t* list, expr_t* expr);
 int parse_let (module_t* module, symbol_table_t* parent, list_t* list, expr_t* expr);
@@ -146,14 +116,18 @@ int parse_progn (module_t* module, symbol_table_t* table, node_t* node, expr_t* 
 int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t* expr);
 int parse_expr (module_t* module, symbol_table_t* table, node_t* node, expr_t* expr);
 int parse_defun (module_t* module, symbol_table_t* table, node_t* node);
+
 symbol_table_t* symbol_table_new (symbol_table_t* parent, int len);
-int symbol_table_get (symbol_table_t* table, char* name, type_t* type, found_val_t* res);
+val_t* symbol_table_get (symbol_table_t* table, char* name, type_t* type);
 val_t* symbol_table_add (symbol_table_t* table, char* name, val_t* val);
-int module_deps_symbol_find (module_t *mod, char* name, type_t* type, found_val_t* res);
-int find_var (module_t* module, symbol_table_t* table, char* name, type_t* type, val_t** var);
-int find_fn (module_t* module, symbol_table_t* table, char* name, type_t* type, val_t** var);
+val_t* module_deps_symbol_find (module_t *mod, char* name, type_t* type);
+int find_var (module_t* module, symbol_table_t* table, char* name, val_t** var);
+val_t* find_fn (module_t* module, symbol_table_t* table, char* name, type_t** type, int num_types);
 int module_cache_init ();
 int module_parse_file (char* filename, module_t* module);
 module_t* module_load (char* filename);
+type_t* type_instance_new (module_t* mod);
+type_t* type_fn_get_return (module_t* mod, type_t* fn, type_t** args);
+type_t* type_find (module_t* mod, node_t* node);
 
 #endif

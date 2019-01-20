@@ -5,7 +5,7 @@ declare i32 @puts(i8*)
 
 declare i32 @putchar(i32)
 
-define i32 @hello(i8*) {
+define i32 @hello_Ptr(i8*) {
 entry:
   %1 = alloca [6 x i8], i8 1
   store [6 x i8] c"hello\00", [6 x i8]* %1
@@ -20,6 +20,6 @@ entry:
   %0 = alloca [6 x i8], i8 1
   store [6 x i8] c"world\00", [6 x i8]* %0
   %1 = bitcast [6 x i8]* %0 to i8*
-  %hello = call i32 @hello(i8* %1)
+  %hello = call i32 @hello_Ptr(i8* %1)
   ret i32 0
 }

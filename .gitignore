@@ -1,6 +1,7 @@
 examples/*
 !examples/*.ll
 !examples/*.sith
+lib/**/*.ll
 main
 main.dSYM
 src/version.h

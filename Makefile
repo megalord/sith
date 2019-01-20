@@ -6,7 +6,10 @@ SRC = $(wildcard $(SRC_DIR)/*.c)
 OBJ = $(SRC:.c=.o)
 
 main: $(OBJ)
-	clang++ -g `llvm-config --cxxflags --ldflags --libs core executionengine mcjit interpreter irreader analysis native bitwriter --system-libs` $(OBJ) -o main
+	clang++ -g $(OBJ) `llvm-config --cxxflags --ldflags --libs core executionengine mcjit interpreter irreader analysis native bitwriter --system-libs` -o main
+
+debug-llvm: $(OBJ)
+	clang++ -g $(OBJ) `~/dev/llvm-project/build/bin/llvm-config --cxxflags --ldflags --libs core executionengine mcjit interpreter irreader analysis native bitwriter --system-libs` -o main
 
 $(SRC_DIR)/main.o: $(SRC_DIR)/main.c
 	echo "#define VERSION \"$(shell git name-rev --tags --name-only $(GIT_COMMIT)) - $(GIT_COMMIT)\"" > $(SRC_DIR)/version.h
@@ -36,3 +39,6 @@ ir: main
 		echo "./main buildir $$f"; \
 		./main buildir $$f; \
 	done
+
+setup:
+	ln -s ./lib /usr/local/lib/sith
