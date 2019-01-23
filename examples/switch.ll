@@ -1,11 +1,11 @@
-; ModuleID = 'examples/switch'
-source_filename = "examples/switch"
+; ModuleID = 'main'
+source_filename = "main"
 
 declare i32 @puts(i8*)
 
 declare i32 @putchar(i32)
 
-define i32 @main() {
+define i32 @"examples/switch_main"() {
 entry:
   switch i32 0, label %else [
     i32 0, label %case_0

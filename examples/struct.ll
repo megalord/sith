@@ -1,5 +1,5 @@
-; ModuleID = 'examples/struct'
-source_filename = "examples/struct"
+; ModuleID = 'main'
+source_filename = "main"
 
 %Atom_I32_I32 = type { i32, i32 }
 
@@ -7,7 +7,7 @@ declare i32 @puts(i8*)
 
 declare i32 @putchar(i32)
 
-define %Atom_I32_I32 @Atom_I32_I32(i32, i32) {
+define %Atom_I32_I32 @"examples/struct_Atom_I32_I32"(i32, i32) {
 entry:
   %Atom = alloca %Atom_I32_I32
   %line = getelementptr %Atom_I32_I32, %Atom_I32_I32* %Atom, i32 0, i32 0
@@ -30,16 +30,16 @@ entry:
   ret i32 %pos
 }
 
-define i32 @main() {
+define i32 @"examples/struct_main"() {
 entry:
-  %Atom = call %Atom_I32_I32 @Atom_I32_I32(i32 72, i32 105)
-  %line = call i32 @line(%Atom_I32_I32 %Atom)
+  %Atom = call %Atom_I32_I32 @"examples/struct_Atom_I32_I32"(i32 72, i32 105)
+  %line = call i32 @"examples/struct_line_Atom"(%Atom_I32_I32 %Atom)
   %putchar = call i32 @putchar(i32 %line)
-  %pos = call i32 @pos(%Atom_I32_I32 %Atom)
+  %pos = call i32 @"examples/struct_pos_Atom"(%Atom_I32_I32 %Atom)
   %putchar1 = call i32 @putchar(i32 %pos)
   ret i32 0
 }
 
-declare i32 @line_Atom(%Atom_I32_I32)
+declare i32 @"examples/struct_line_Atom"(%Atom_I32_I32)
 
-declare i32 @pos_Atom(%Atom_I32_I32)
+declare i32 @"examples/struct_pos_Atom"(%Atom_I32_I32)

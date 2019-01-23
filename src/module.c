@@ -29,7 +29,7 @@ module_t MODULE_BUILTIN = {
     .names = NULL,
     .values = NULL
   },
-  .llvm = NULL
+  .compiled = 0,
 };
 
 int module_cache_init () {
@@ -218,6 +218,7 @@ module_t* module_load (char* partial_path) {
 
   mod = module_cache_next();
   mod->name = malloc(strlen(path) + 1);
+  mod->compiled = 0;
   strcpy(mod->name, path);
 
   strncat(path, ".sith", 5);
@@ -305,30 +306,33 @@ int type_add_constructors (module_t* mod, type_t* type) {
   }
 }
 
-val_t* module_deps_symbol_find (module_t *mod, char* name, type_t* type) {
+found_val_t module_deps_symbol_find (module_t *mod, char* name, type_t* type) {
   val_t* res;
   for (int i = 0; i < mod->num_deps; i++) {
     res = symbol_table_get(&(mod->deps[i]->table), name, type);
     if (res != NULL) {
-      return res;
+      return (found_val_t){ .mod = mod->deps[i]->name, .val = res };
     }
   }
-  return NULL;
+  return (found_val_t){ .mod = NULL, .val = NULL };
 }
 
-int find_var (module_t* module, symbol_table_t* table, char* name, val_t** var) {
-  *var = symbol_table_get(table, name, NULL);
-  if (*var == NULL) {
-    *var = module_deps_symbol_find(module, name, NULL);
+found_val_t find_var (module_t* module, symbol_table_t* table, char* name) {
+  val_t* var = symbol_table_get(table, name, NULL);
+  if (var != NULL) {
+    return (found_val_t){ .mod = module->name, .val = var };
   }
-  if (*var == NULL) {
-    fprintf(stderr, "var %s not found\n", name);
-    return 1;
+
+  found_val_t res = module_deps_symbol_find(module, name, NULL);
+  if (res.val != NULL) {
+    return res;
   }
-  return 0;
+
+  fprintf(stderr, "var %s not found\n", name);
+  return (found_val_t){ .mod = NULL, .val = NULL };
 }
 
-val_t* find_fn (module_t* module, symbol_table_t* table, char* name, type_t** types, int num_types) {
+found_val_t find_fn (module_t* module, symbol_table_t* table, char* name, type_t** types, int num_types) {
   // should type setup be handled by caller?
   type_t type = { .name = NULL, .meta = TYPE_FUNC, .num_fields = num_types };
   type.fields = malloc(num_types * sizeof(type_t*));
@@ -337,17 +341,19 @@ val_t* find_fn (module_t* module, symbol_table_t* table, char* name, type_t** ty
   }
 
   val_t* fn = symbol_table_get(table, name, &type);
-  if (fn == NULL) {
-    fn = module_deps_symbol_find(module, name, &type);
+  if (fn != NULL) {
+    return (found_val_t){ .mod = module->name, .val = fn };
   }
-  if (fn == NULL) {
-    fprintf(stderr, "fn %s not found\n", name);
-    type_print(&type);
-    puts("");
-    module_print(module, 0);
-    return NULL;
+  found_val_t res = module_deps_symbol_find(module, name, &type);
+  if (res.val != NULL) {
+    return res;
   }
-  return fn;
+
+  fprintf(stderr, "fn %s not found\n", name);
+  type_print(&type);
+  puts("");
+  module_print(module, 0);
+  return (found_val_t){ .mod = NULL, .val = NULL };
 }
 
 type_t* type_instance_new (module_t* mod) {

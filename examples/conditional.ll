@@ -1,16 +1,22 @@
-; ModuleID = 'examples/conditional'
-source_filename = "examples/conditional"
+; ModuleID = 'main'
+source_filename = "main"
 
-@False = external global i1
-@True = external global i1
+@"/usr/local/lib/sith/data/bool_False_Bool_False" = global i1 false
+@"/usr/local/lib/sith/data/bool_True_Bool_False" = global i1 true
+
+declare i1 @"/usr/local/lib/sith/data/bool_and_Bool_Bool"(i1, i1)
+
+declare i1 @"/usr/local/lib/sith/data/bool_or_Bool_Bool"(i1, i1)
+
+declare i1 @"/usr/local/lib/sith/data/bool_not_Bool"(i1)
 
 declare i32 @puts(i8*)
 
 declare i32 @putchar(i32)
 
-define i32 @main() {
+define i32 @"examples/conditional_main"() {
 entry:
-  %load_if_cond = load i1, i1* @True
+  %load_if_cond = load i1, i1* @"/usr/local/lib/sith/data/bool_True_Bool_False"
   br i1 %load_if_cond, label %then, label %else
 
 then:                                             ; preds = %entry

@@ -53,24 +53,25 @@ int main (int argc, char** argv) {
     return 0;
   }
 
-  if (codegen_init() != 0) {
+  context_t ctx;
+  if (codegen_init(&ctx, &module) != 0) {
     return 1;
   }
 
-  if (module_compile(&module) != 0) {
+  if (module_compile(&ctx) != 0) {
     return 1;
   }
 
   if (strcmp(argv[1], "buildir") == 0) {
-    return emit_ir(&module);
+    return emit_ir(&ctx);
   }
 
   if (strcmp(argv[1], "build") == 0) {
-    return emit_object_code(&module);
+    return emit_object_code(&ctx);
   }
 
   if (strcmp(argv[1], "run") == 0) {
-    return exec_main(&module);
+    return exec_main(&ctx);
   }
   return 1;
 }

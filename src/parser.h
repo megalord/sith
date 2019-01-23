@@ -29,7 +29,7 @@ typedef struct expr_t {
     // EXPR_CONST
     struct { struct val_t* cnst; };
     // EXPR_FUNCALL
-    struct { char* fn_name; struct val_t* fn; int num_params; struct expr_t* params; };
+    struct { char* fn_mod; char* fn_name; struct val_t* fn; int num_params; struct expr_t* params; };
     // EXPR_IF
     struct { struct expr_t *if_cond, *if_, *else_; };
     // EXPR_LET
@@ -41,7 +41,7 @@ typedef struct expr_t {
     // EXPR_SWITCH
     struct { int num_cases; struct expr_t *case_cond, *case_bodies; struct val_list_t* case_vals; };
     // EXPR_VAR
-    struct { char* var_name; struct val_t* var; };
+    struct { char* var_mod; char* var_name; struct val_t* var; };
   };
 } expr_t;
 
@@ -95,13 +95,18 @@ typedef struct module_t {
   int max_type_instances;
   type_t* type_instances;
   symbol_table_t table;
-  LLVMModuleRef llvm;
+  int compiled;
 } module_t;
 
 typedef struct {
   int len, max;
   module_t* modules;
 } module_cache_t;
+
+typedef struct {
+  val_t* val;
+  char* mod;
+} found_val_t;
 
 int parse_type (module_t* module, node_t* node, type_t* type);
 int parse_type_func (module_t* mod, type_t* type, node_t* node);
@@ -120,9 +125,9 @@ int parse_defun (module_t* module, symbol_table_t* table, node_t* node);
 symbol_table_t* symbol_table_new (symbol_table_t* parent, int len);
 val_t* symbol_table_get (symbol_table_t* table, char* name, type_t* type);
 val_t* symbol_table_add (symbol_table_t* table, char* name, val_t* val);
-val_t* module_deps_symbol_find (module_t *mod, char* name, type_t* type);
-int find_var (module_t* module, symbol_table_t* table, char* name, val_t** var);
-val_t* find_fn (module_t* module, symbol_table_t* table, char* name, type_t** type, int num_types);
+found_val_t module_deps_symbol_find (module_t *mod, char* name, type_t* type);
+found_val_t find_var (module_t* module, symbol_table_t* table, char* name);
+found_val_t find_fn (module_t* module, symbol_table_t* table, char* name, type_t** type, int num_types);
 int module_cache_init ();
 int module_parse_file (char* filename, module_t* module);
 module_t* module_load (char* filename);

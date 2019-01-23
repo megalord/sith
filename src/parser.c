@@ -218,11 +218,13 @@ int parse_match_destructure (module_t* module, symbol_table_t* table, node_t* no
   }
   args[num_args - 1] = ret;
 
-  pat->fn = find_fn(module, table, pat->fn_name, args, num_args);
-  if (pat->fn == NULL) {
+  found_val_t res = find_fn(module, table, pat->fn_name, args, num_args);
+  if (res.val == NULL) {
     fprintf(stderr, "no function found found for match\n");
     return 1;
   }
+  pat->fn = res.val;
+  pat->fn_mod = res.mod;
 
   *let_table = symbol_table_new(table, num_args - 1);
   assert(num_args == 2);
@@ -268,9 +270,12 @@ int parse_match (module_t* module, symbol_table_t* table, node_t* node, expr_t* 
     if (sub_node->type == NODE_ATOM) {
       curr_pat->form = EXPR_VAR;
       curr_pat->var_name = sub_node->atom->name;
-      if (find_var(module, table, curr_pat->var_name, &curr_pat->var) != 0) {
+      found_val_t res = find_var(module, table, curr_pat->var_name);
+      if (res.val == NULL) {
         return 1;
       }
+      curr_pat->var = res.val;
+      curr_pat->var_mod = res.mod;
       if (parse_expr(module, table, sub_node->next, curr_body) != 0) {
         return 1;
       }
@@ -321,8 +326,8 @@ int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t
   }
   args[i] = type_get_hole_builtin('a');
 
-  expr->fn = find_fn(module, table, expr->fn_name, args, expr->num_params + 1);
-  if (expr->fn == NULL) {
+  found_val_t res = find_fn(module, table, expr->fn_name, args, expr->num_params + 1);
+  if (res.val == NULL) {
     fprintf(stderr, "no function %s found for funcall\n", expr->fn_name);
     type_print(args[0]);
     for (int j = 1; j < expr->num_params + 1; j++) {
@@ -332,6 +337,8 @@ int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t
     fprintf(stderr, "\n");
     return 1;
   }
+  expr->fn = res.val;
+  expr->fn_mod = res.mod;
 
   expr->type = type_fn_get_return(module, expr->fn->type, args);
   return 0;
@@ -343,9 +350,12 @@ int parse_expr (module_t* module, symbol_table_t* table, node_t* node, expr_t* e
       if (node->atom->type == ATOM_IDENTIFIER) {
         expr->form = EXPR_VAR;
         expr->var_name = node->atom->name;
-        if (find_var(module, table, node->atom->name, &expr->var) != 0) {
+        found_val_t res = find_var(module, table, expr->var_name);
+        if (res.val == NULL) {
           return 1;
         }
+        expr->var = res.val;
+        expr->var_mod = res.mod;
         if (expr->var->type->meta == TYPE_FUNC) {
           fprintf(stderr, "%s is a function\n", expr->var_name);
           return 1;

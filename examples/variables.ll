@@ -1,11 +1,11 @@
-; ModuleID = 'examples/variables'
-source_filename = "examples/variables"
+; ModuleID = 'main'
+source_filename = "main"
 
 declare i32 @puts(i8*)
 
 declare i32 @putchar(i32)
 
-define i32 @main() {
+define i32 @"examples/variables_main"() {
 entry:
   %0 = alloca [6 x i8], i8 1
   store [6 x i8] c"hello\00", [6 x i8]* %0
