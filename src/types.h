@@ -11,6 +11,7 @@ typedef enum {
   TYPE_PARAM,
   TYPE_PRIM,
   TYPE_PRODUCT,
+  // TYPE_SYM,
   TYPE_SUM
 } meta_type_t;
 

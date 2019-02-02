@@ -455,6 +455,12 @@ int compile_funcall (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMVa
     }
     *result = LLVMBuildICmp(ctx->builder, LLVMIntEQ, args[0], args[1], "eq");
     return 0;
+  } else if (strcmp(expr->fn_name, "setf") == 0) {
+    if (compile_setf() != 0) {
+      fprintf(stderr, "error compile_funcall\n");
+      return 1;
+    }
+    return 0;
   }
 
   LLVMValueRef fn = expr->fn->llvm;

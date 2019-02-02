@@ -2,3 +2,6 @@
 
 (: puts (-> (Ptr I8) I32))
 (: putchar (-> I32 I32))
+
+(: fopen (-> (Ptr I8) (Ptr I8) (Ptr FILE)))
+(: fclose (-> (Ptr FILE) I32))

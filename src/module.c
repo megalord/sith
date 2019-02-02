@@ -43,6 +43,22 @@ int module_cache_init () {
 
   MODULE_BUILTIN.num_types = type_builtins(&MODULE_BUILTIN.types);
   MODULE_BUILTIN.type_instances = type_new_i(MODULE_BUILTIN.max_type_instances);
+  MODULE_BUILTIN.table.num_symbols = 0;
+  MODULE_BUILTIN.table.max_symbols = 2;
+  MODULE_BUILTIN.table.names = malloc(sizeof(char*) * 2);
+  MODULE_BUILTIN.table.symbols = malloc(sizeof(val_t) * 2);
+
+  val_t* setf = malloc(sizeof(val_t));
+  setf_ty = (type_t) { .name = NULL, .meta = TYPE_FUNC, .num_fields = 3, field_names = NULL, num_args = 3, args = (char*)"abc" };
+  setf_ty.fields = type_new_i(setf_ty.num_fields);
+  setf_ty.fields[0] = TYPE_HOLES;
+  setf_ty.fields[1] = TYPE_HOLES + 1;
+  setf_ty.fields[2] = TYPE_HOLES + 2;
+  setf->type = type_new();
+  memcpy(setf->type, &setf_ty, sizeof(type_t));
+
+  symbol_table_add(MODULE_BUILTIN.table, (char*)"setf", setf);
+
   TYPE_CSTR = type_instance(TYPE_PTR, &TYPE_I8, type_instance_new(&MODULE_BUILTIN));
   return 0;
 }

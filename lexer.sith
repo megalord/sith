@@ -10,7 +10,7 @@
   (* source (Ptr FILE)
      next I32))
 
-;; (: filename->node (-> Str Cons I32))
-;; (defun filename->node (filename, root)
-;;   )
-  
+(: filename->node (-> Str Cons I32))
+(defun filename->node (filename, root)
+  (setf root cdr None)
+  0)
