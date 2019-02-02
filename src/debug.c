@@ -135,7 +135,9 @@ void ast_print (module_t* mod, int depth) {
   for (int i = 0; i < mod->table.num_symbols; i++) {
     if (mod->table.values[i].type->meta == TYPE_FUNC) {
       fprintf(stderr, "%*sdefn %s\n", depth, "", mod->table.names[i]);
-      expr_print(mod->table.values[i].body, depth + INDENTATION);
+      if (mod->table.values[i].body != NULL) {
+        expr_print(mod->table.values[i].body, depth + INDENTATION);
+      }
     }
   }
 }

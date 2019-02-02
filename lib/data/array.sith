@@ -1,0 +1,15 @@
+(deftype (Array a)
+  (* len I32
+     data a))
+
+;(: each (-> (-> a Void) (Array a) Void))
+;(: map (-> (-> a b) (Array a) (Array b)))
+;(: filter (-> (-> a Bool) (Array a) (Array a)))
+;(: nth (-> (Array a) I32 a))
+
+;(: ++ (-> (Array a) (Array a) (Array a)))
+
+(deftype (DynArray a)
+  (* len I32
+     max I32
+     data a))

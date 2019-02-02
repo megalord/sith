@@ -1,0 +1,159 @@
+i really not liking the use of (Ptr a) as opposed to something built into the compiler, i.e.
+type->is_ptr
+reader macro?
+
+get rid of atom type, just include " or ' in the string
+
+https://github.com/carld/micro-lisp/blob/master/micro-lisp.c#L31
+http://llvm.org/docs/tutorial/LangImpl05.html#for-loop-expression
+http://www.buildyourownlisp.com/chapter9_s_expressions#lists_and_lisps
+https://mapping-high-level-constructs-to-llvm-ir.readthedocs.io
+http://nondot.org/sabre/LLVMNotes/SizeOf-OffsetOf-VariableSizedStructs.txt
+
+reader macros: https://gist.github.com/chaitanyagupta/9324402
+
+
+bottom up ast traversal for type inference
+
+
+----- TODO -----
+
+LINE/FILE no
+types
+stdlib
+~parse c header files https://shaharmike.com/cpp/libclang/~ - no c deps
+type checking
+arity
+nth
+reader macros, then auto pointer deref (. everywhere)
+define set + typedefs
+require, use
+case multi?
+
+
+https://llvm.org/docs/LangRef.html#module-structure
+https://gist.github.com/ishikawa/4442395
+
+
+https://gist.github.com/Mytherin/ccd6dd333258bdf409f9525a7a35be36
+
+
+
+
+1) lex into sexpr (node_t)
+2) create value entries in symbol table for functions
+3) loop through all functions to compile
+
+
+
+
+Maybe Int
+
+type { i1, i32 }
+
+Just x -> { 0, x }
+None   -> { 1,   }
+
+(progn
+  (let (tmp (alloca (Maybe Int)))
+    (set-field tmp 0 0)
+    (set-field tmp 1 x)))
+
+{ .data = 0, .type = { .name = "Just", .meta = TYPE_FUNC, .is_template = 1, .num_fields = 1, .fields = &TYPE_POLY, .field_names = NULL } }
+
+{
+  .fields = [{
+    .data = 0,
+    .type = {
+      .name = "I8",
+      .meta = TYPE_PRIM,
+      // ...
+    }
+  }],
+  .type = {
+    .name = "Just",
+    .meta = TYPE_FUNC,
+    .is_template = 0,
+    .num_fields = 1,
+    .fields = [{
+      .data = NULL,
+      .type = {
+        .name = "I8",
+        .meta = TYPE_PRIM,
+        // ...
+      }
+    }],
+    .field_names = NULL
+  }
+}
+
+
+meta type     | values | constructors |
+------------- | ------ | ------------ |
+TYPE_ALIAS    |        |              |
+TYPE_PRIM     |        |              |
+TYPE_FUNC     |        |              |
+TYPE_PARAM    |        |      x       |
+TYPE_PRODUCT  |        |      x       |
+TYPE_SUM      |   x    |      x       |
+
+
+
+
+
+
+LLVMAttributeRef alwaysinline_attr;
+
+  LLVMAddAttributeAtIndex(fn, LLVMAttributeFunctionIndex, alwaysinline_attr);
+
+void codegen_init () {
+  {
+    unsigned id = LLVMGetEnumAttributeKindForName("alwaysinline", sizeof("alwaysinline") - 1);
+    alwaysinline_attr = LLVMCreateEnumAttribute(LLVMGetGlobalContext(), id, 0);
+  }
+}
+
+
+
+
+SUM OF PRODUCT TYPES
+              i8 i32        i32
+(deftype Node (+ (Ptr Atom) (Ptr List)))
+(deftype Node (+ (NodeAtom (Ptr Atom)) (Ptr List)))
+              i8 ?    ?
+(deftype Node (+ Atom List))
+                   i8 ?        x
+(deftype (Maybe a) (+ (Just a) None))
+
+(NodeAtom Atom)
+
+  %2 = alloca %struct.sum_t, align 8
+  %3 = alloca %struct.p1_t*, align 8
+  %11 = getelementptr inbounds %struct.sum_t, %struct.sum_t* %2, i64 1
+  %12 = bitcast %struct.sum_t* %11 to %struct.p1_t*
+  store %struct.p1_t* %12, %struct.p1_t** %3, align 8
+
+typedef struct {
+  i8 meta;
+  void* p;   // union { p1_t* p1; p2_t* p2; };
+} sum_type_t;
+
+(deftype Sum (+ (Ptr P1) (Ptr P2)))
+(deftype Sum (Ptr (+ P1 P2)))
+
+(: use_p1 (-> (Ptr P1) ...))
+(match val
+  ((Ptr P1) (use_p1 it))  ; it is a pointer
+  ((Ptr (P2 p2)) (use_p2 p2)))
+
+typedef struct {
+  i8 meta;
+  union {
+    struct { p1_sub1_t p1_sub1, ... };
+    struct { p2_sub1_t p2_sub1, ... };
+  }
+} sum_type_t;
+
+(match val
+  ((P1 p1) (use_p1 p1))  ; p1 is a struct
+  ((P2 p2) (use_p2 p2)))

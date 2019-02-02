@@ -51,11 +51,6 @@ char* type_instance_name (type_t* type, type_t* template) {
   return type_name;
 }
 
-char* type_compiled_name (type_t* type, type_t* template) {
-  // this function may not be needed; remove if type names always have all field names
-  return (template == NULL) ? type->name : type_instance_name(type, template);
-}
-
 char* val_name (char* mod, char* name, type_t* type) {
   int rem = 80;
   int i = 0;
@@ -185,6 +180,9 @@ int compile_type (type_t* type) {
   }
 
   switch (type->meta) {
+    case TYPE_OPAQUE:
+      type->llvm = LLVMStructCreateNamed(LLVMGetGlobalContext(), type->name);
+      return 0;
     case TYPE_PARAM:
       if (strcmp(type->name, "Ptr") == 0) {
         if (type->num_fields != 1) {
@@ -209,6 +207,9 @@ int compile_type (type_t* type) {
         return 1;
       }
     case TYPE_PRODUCT:
+      //if (strcmp(type->name, "List") == 0) {
+      //  return compile_type_list(type);
+      //} else {
       return compile_type_product(type);
     case TYPE_SUM:
       return compile_type_sum(type);

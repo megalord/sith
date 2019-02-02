@@ -365,6 +365,7 @@ void type_print (type_t* type) {
   switch (type->meta) {
     case TYPE_PRIM:
     case TYPE_HOLE:
+    case TYPE_OPAQUE:
       fprintf(stderr, "%s", type->name);
       break;
     case TYPE_FUNC:
@@ -379,8 +380,7 @@ void type_print (type_t* type) {
     case TYPE_PARAM:
       fprintf(stderr, "(%s", type->name);
       for (i = 0; i < type->num_fields; i++) {
-        fprintf(stderr, " ");
-        type_print(type->fields[i]);
+        fprintf(stderr, " %s", type->fields[i]->name);
       }
       fprintf(stderr, ")");
       break;

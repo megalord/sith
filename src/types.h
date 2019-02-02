@@ -7,6 +7,7 @@ typedef enum {
   TYPE_ALIAS,
   TYPE_HOLE,
   TYPE_FUNC,
+  TYPE_OPAQUE,
   TYPE_PARAM,
   TYPE_PRIM,
   TYPE_PRODUCT,

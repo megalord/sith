@@ -1,0 +1,16 @@
+(include "data/cons")
+(include "data/str")
+
+(deftype Buffer
+  (* rem I32
+     size I32
+     data Str))
+
+(deftype Stream
+  (* source (Ptr FILE)
+     next I32))
+
+;; (: filename->node (-> Str Cons I32))
+;; (defun filename->node (filename, root)
+;;   )
+  

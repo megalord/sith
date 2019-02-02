@@ -1,0 +1,76 @@
+(deftype AtomType (+ Char Identifier Int String))
+(deftype Atom
+  (* name (Ptr I8)
+     type AtomType
+     line I8
+     pos  I8))
+(deftype List
+  (* len I8
+     fst (Maybe (Ptr Node))))
+(deftype Node (+ (NodeAtom Atom) (NodeList List)))
+
+(deftype Node
+  (+ (Atom
+       (* name (Ptr I8)
+          type AtomType
+          line I8
+          pos  I8))
+     (List
+       (* len I8
+          fst (Maybe (Ptr Node))))))
+
+;(match node
+;  ((NodeAtom atom) (name atom)) ; node is (Ptr Atom)
+;  ((NodeList list) (len list)))
+
+(deftype Node
+  (+ (Atom
+       (* name (Ptr I8)
+          type AtomType
+          line I8
+          pos  I8))
+     (Ptr (LinkedList Node))))
+
+
+(deftype Node
+  (* line I8
+     pos  I8)
+     data (+ (Atom
+               (* name Str
+                  type AtomType))
+             (List (Ptr (LinkedList Node)))))
+
+(deftype Node
+  (LinkedList
+    (* line I8
+       pos  I8
+       data (+ (Ptr Atom) (Ptr Node)))))
+
+(deftype Node
+  (LinkedList
+    (+ (Ptr Atom) (Ptr Node))))
+
+
+; mutual definition lets me treat Node separately
+; 1) do i want this
+; 2) can the compiler solve this? hope yes because (Ptr NodeList); yes with another pass
+
+(deftype Node
+  (* line I8
+     pos  I8
+     data (+ (NodeAtom (Ptr Atom)) (NodeList (Ptr ParseNode)))))
+
+(deftype ParseNode (LinkedList Node))
+
+typedef struct {
+  struct {
+    unsigned int line;
+    unsigned int pos;
+    node_type_t type;
+    union {
+      atom_t* atom;
+      node_t* node;
+    }
+  } car;
+  node_t* cdr;
+} node_t;

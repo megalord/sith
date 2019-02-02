@@ -1,0 +1,51 @@
+(deftype (List a)
+  (* len I32
+     data a))
+
+;(: each (-> (-> a Void) (List a) Void))
+;(: map (-> (-> a b) (List a) (List b)))
+;(: filter (-> (-> a Bool) (List a) (List a)))
+;(: nth (-> (List a) I32 a))
+
+;(: ++ (-> (List a) (List a) (List a)))
+
+(deftype (LinkedList a)
+  (* data a
+     next (Ptr (Maybe (LinkedList a)))))
+
+(: each (-> (-> a Void) (LinkedList a) Void))
+(defun (each f x)
+  (f (data x))
+  (match (next x)
+    ((Just y) (each f y))
+    (None     void)))
+
+(defun (each f x)
+  (while (isJust x)
+    (f (data x)) ; must know that x was checked
+    (set x (next x))))
+
+
+
+(: car (-> (LinkedList a) a))
+(defun (car x) (data x))
+
+(: cdr (-> (LinkedList a) (Maybe (LinkedList a))))
+(defun (cdr x) (next x))
+
+(: cons (-> a (LinkedList a) (LinkedList a)))
+(defun (cons x xs) (next x xs))
+
+
+
+(: print (-> Node Void))
+(defun (print n)
+ (fprintf stderr "%d:%d\n" (line n) (pos n))
+  (match (data n)
+    ((Atom a) (fprintf stderr "%s: %s\n" (type a) (name a)))
+    ((NodeList ns) (each print ns))))
+
+(let (ns (cons (Node 0 1 (Ptr (Atom "foo" Identifier)))
+           (cons (Node 0 1 (Ptr (Atom "foo" Identifier)))
+             '())))
+  (each print ns))

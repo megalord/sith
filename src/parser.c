@@ -469,6 +469,11 @@ int parse_defun (module_t* module, symbol_table_t* table, node_t* node) {
 }
 
 int parse_type (module_t* mod, node_t* node, type_t* type) {
+  if (node == NULL) {
+    type->meta = TYPE_OPAQUE;
+    return 0;
+  }
+
   type->field_names = NULL;
   switch (node->type) {
     case NODE_ATOM:
@@ -511,6 +516,22 @@ int parse_type (module_t* mod, node_t* node, type_t* type) {
   return 0;
 }
 
+int parse_or_find_type (module_t* mod, node_t* node, type_t** type) {
+  *type = type_find(mod, node);
+  if (*type != NULL) {
+    return 0;
+  }
+
+  *type = type_new();
+  if (parse_type(mod, node, *type) != 0) {
+    fprintf(stderr, "invalid type: type not parsed\n");
+    node_print(node, 0);
+    fprintf(stderr, "\n");
+    return 1;
+  }
+  return 0;
+}
+
 int parse_type_template (module_t* mod, node_t* node, type_t* type) {
   node_t* name_node = node->list->fst;
   if (name_node->type != NODE_ATOM) {
@@ -522,7 +543,8 @@ int parse_type_template (module_t* mod, node_t* node, type_t* type) {
   type->num_args = node->list->len - 1;
   type->args = malloc(type->num_args * sizeof(char));
 
-  for (int i = 0; i < type->num_args; i++) {
+  int i = 0;
+  for (; i < type->num_args; i++) {
     name_node = name_node->next;
     if (name_node->type != NODE_ATOM) {
       fprintf(stderr, "invalid template type arg: must be atom\n");
@@ -534,6 +556,7 @@ int parse_type_template (module_t* mod, node_t* node, type_t* type) {
     }
     type->args[i] = name_node->atom->name[0];
   }
+  type->args[i] = '\0';
 
   node = node->next;
   if (node->type == NODE_ATOM) {
@@ -602,9 +625,8 @@ int parse_type_product (module_t* mod, type_t* type, node_t* node) {
           fprintf(stderr, "invalid product type: field type invalid form\n");
           return 1;
         }
-        field = type_find(mod, sub_node);
-        if (field == NULL) {
-          fprintf(stderr, "invalid product type: field type not found %s\n", sub_node->atom->name);
+        if (parse_or_find_type(mod, node, &field) != 0) {
+          fprintf(stderr, "invalid product type: field type not parsed or found %s\n", sub_node->atom->name);
           return 1;
         }
         break;
@@ -640,8 +662,8 @@ int parse_type_sum (module_t* mod, type_t* type, node_t* node) {
           if (sub_node->type == NODE_ATOM && islower(sub_node->atom->name[0])) {
             field = type_get_hole_builtin(sub_node->atom->name[0]);
           } else {
-            field = type_new();
-            if (parse_type(mod, sub_node, field) != 0) {
+            if (parse_or_find_type(mod, sub_node, &field) != 0) {
+              fprintf(stderr, "invalid sum type: field type not parsed or found\n");
               return 1;
             }
           }
