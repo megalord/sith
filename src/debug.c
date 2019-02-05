@@ -73,7 +73,7 @@ void module_print_follow (module_t* module, int depth) {
 void expr_print (expr_t* expr, int depth) {
   switch (expr->form) {
     case EXPR_CONST:
-      val_print("const", expr->cnst, 0);
+      val_print((char*)"const", expr->cnst, 0);
       break;
     case EXPR_FUNCALL:
       fprintf(stderr, "%*sfuncall %s\n", depth, "", expr->fn_name);
@@ -135,7 +135,9 @@ void ast_print (module_t* mod, int depth) {
   for (int i = 0; i < mod->table.num_symbols; i++) {
     if (mod->table.values[i].type->meta == TYPE_FUNC) {
       fprintf(stderr, "%*sdefn %s\n", depth, "", mod->table.names[i]);
-      expr_print(mod->table.values[i].body, depth + INDENTATION);
+      if (mod->table.values[i].body != NULL) {
+        expr_print(mod->table.values[i].body, depth + INDENTATION);
+      }
     }
   }
 }

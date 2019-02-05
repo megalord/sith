@@ -1,9 +1,15 @@
 ; ModuleID = 'main'
 source_filename = "main"
 
+%FILE = type opaque
+
 declare i32 @puts(i8*)
 
 declare i32 @putchar(i32)
+
+declare %FILE* @fopen(i8*, i8*)
+
+declare i32 @fclose(%FILE*)
 
 define i32 @"examples/hello-world_hello_Ptr"(i8*) {
 entry:

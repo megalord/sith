@@ -26,11 +26,14 @@ typedef void* (*fn_three_arg_t) (void*, void*, void*);
 char type_name[80];
 char fn_name_buffer[80];
 
-int type_instance_name_iter (char* str, int rem, type_t* type, type_t* template) {
+int type_instance_name_iter (char* str, int rem, type_t* type, type_t* template, int depth) {
   int i = 0;
   for (; i < (int)strlen(type->name); i++) {
     assert(i < rem);
     str[i] = type->name[i];
+  }
+  if (depth > 0) {
+    return i;
   }
   assert(i < rem);
   for (int j = 0; j < type->num_fields; j++) {
@@ -39,21 +42,16 @@ int type_instance_name_iter (char* str, int rem, type_t* type, type_t* template)
     }
     if (type->fields[j] != NULL) {
       str[i++] = '_';
-      i += type_instance_name_iter(str + i, rem - i, type->fields[j], NULL);
+      i += type_instance_name_iter(str + i, rem - i, type->fields[j], NULL, 1);
     }
   }
   return i;
 }
 
 char* type_instance_name (type_t* type, type_t* template) {
-  int i = type_instance_name_iter(type_name, 80, type, template);
+  int i = type_instance_name_iter(type_name, 80, type, template, 0);
   type_name[i] = '\0';
   return type_name;
-}
-
-char* type_compiled_name (type_t* type, type_t* template) {
-  // this function may not be needed; remove if type names always have all field names
-  return (template == NULL) ? type->name : type_instance_name(type, template);
 }
 
 char* val_name (char* mod, char* name, type_t* type) {
@@ -130,6 +128,9 @@ int compile_type_product (type_t* type) {
   type->llvm = LLVMStructCreateNamed(LLVMGetGlobalContext(), type_instance_name(type, NULL));
   LLVMTypeRef* types = malloc(type->num_fields * sizeof(LLVMTypeRef));
   for (int i = 0; i < type->num_fields; i++) {
+    if (type->fields[i]->llvm == NULL && compile_type(type->fields[i]) != 0) {
+      return 1;
+    }
     types[i] = type->fields[i]->llvm;
   }
   LLVMStructSetBody(type->llvm, types, type->num_fields, 0);
@@ -154,7 +155,14 @@ int compile_type_sum (type_t* type) {
   LLVMTypeRef* types = malloc((type->num_fields + 1) * sizeof(LLVMTypeRef));
   types[0] = (type->num_fields <= 2) ? LLVMInt1Type() : LLVMInt8Type();
   for (int i = 0; i < type->num_fields; i++) {
-    types[i+1] = (type->fields[i] == NULL) ? LLVMInt1Type() : type->fields[i]->llvm;
+    if (type->fields[i] == NULL) {
+      types[i+1] = LLVMInt1Type();
+    } else {
+      if (type->fields[i]->llvm == NULL && compile_type(type->fields[i]) != 0) {
+        return 1;
+      }
+      types[i+1] = type->fields[i]->llvm;
+    }
   }
   LLVMStructSetBody(type->llvm, types, type->num_fields + 1, 0);
   return 0;
@@ -185,10 +193,19 @@ int compile_type (type_t* type) {
   }
 
   switch (type->meta) {
+    case TYPE_OPAQUE:
+      type->llvm = LLVMStructCreateNamed(LLVMGetGlobalContext(), type->name);
+      return 0;
     case TYPE_PARAM:
       if (strcmp(type->name, "Ptr") == 0) {
         if (type->num_fields != 1) {
           fprintf(stderr, "Ptr type must have 1 field, got %d\n", type->num_fields);
+          return 1;
+        }
+        // TODO: This is needed because the builtin module can have type instances for Ptr
+        // for types that are defined elsewhere, but unlike other modules, builtin cannot have dependencies.
+        if (type->fields[0]->llvm == NULL && compile_type(type->fields[0]) != 0) {
+          fprintf(stderr, "Ptr type compile field failed\n");
           return 1;
         }
         type->llvm = LLVMPointerType(type->fields[0]->llvm, 0);
@@ -209,6 +226,9 @@ int compile_type (type_t* type) {
         return 1;
       }
     case TYPE_PRODUCT:
+      //if (strcmp(type->name, "List") == 0) {
+      //  return compile_type_list(type);
+      //} else {
       return compile_type_product(type);
     case TYPE_SUM:
       return compile_type_sum(type);
@@ -439,6 +459,11 @@ int compile_switch (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMVal
   return 0;
 }
 
+int compile_setf (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMValueRef* result) {
+  fprintf(stderr, "compile_setf not implemented\n");
+  return 1;
+}
+
 int compile_funcall (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMValueRef* result) {
   LLVMValueRef* args = malloc(expr->num_params * sizeof(LLVMValueRef));
   for (int i = 0; i < expr->num_params; i++) {
@@ -453,6 +478,12 @@ int compile_funcall (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMVa
       return 1;
     }
     *result = LLVMBuildICmp(ctx->builder, LLVMIntEQ, args[0], args[1], "eq");
+    return 0;
+  } else if (strcmp(expr->fn_name, "setf") == 0) {
+    if (compile_setf(ctx, table, expr, result) != 0) {
+      fprintf(stderr, "error compile_funcall\n");
+      return 1;
+    }
     return 0;
   }
 
@@ -553,7 +584,12 @@ int compile_type_sum_constructor (context_t* ctx, type_t* type, type_t* field, i
   }
 
   type_t* fn_type = type_sum_constructor(field, type);
-  compile_type_fn(fn_type);
+  if (compile_type_fn(fn_type) != 0) {
+    fprintf(stderr, "error compiling type sum constructor for %s; fault of type_sum_constructor()\n", type->name);
+    type_print(fn_type);
+    fprintf(stderr, "\n");
+    return 1;
+  }
   LLVMValueRef fn = LLVMAddFunction(ctx->mod_llvm, val_name(ctx->mod_src->name, type->field_names[index], fn_type), fn_type->llvm);
 
   LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fn, "entry");
@@ -586,7 +622,12 @@ int compile_type_sum_constructor (context_t* ctx, type_t* type, type_t* field, i
 
 int compile_type_product_constructor(context_t* ctx, type_t* type) {
   type_t* fn_type = type_product_constructor(type);
-  compile_type_fn(fn_type);
+  if (compile_type_fn(fn_type) != 0) {
+    fprintf(stderr, "error compiling type product constructor for %s; fault of type_product_constructor()\n", type->name);
+    type_print(fn_type);
+    fprintf(stderr, "\n");
+    return 1;
+  }
   LLVMValueRef fn = LLVMAddFunction(ctx->mod_llvm, val_name(ctx->mod_src->name, type->name, fn_type), fn_type->llvm);
 
   LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fn, "entry");
@@ -610,7 +651,12 @@ int compile_type_product_constructor(context_t* ctx, type_t* type) {
 
 int compile_type_product_getter (context_t* ctx, type_t* type, int index) {
   type_t* fn_type = type_product_getter(type->fields[index], type);
-  compile_type_fn(fn_type);
+  if (compile_type_fn(fn_type) != 0) {
+    fprintf(stderr, "error compiling type product getter; fault of type_product_getter()\n");
+    type_print(fn_type);
+    fprintf(stderr, "\n");
+    return 1;
+  }
   // type->field_names[index] + type_instance_name(type->fields[index], NULL)
   LLVMValueRef fn = LLVMAddFunction(ctx->mod_llvm, type->field_names[index], fn_type->llvm);
 
@@ -699,14 +745,29 @@ int module_compile (context_t* ctx) {
   for (int i = 0; i < ctx->mod_src->table.num_symbols; i++) {
     val = ctx->mod_src->table.values + i;
     // skip value constructors, which are compiled with their types
-    // TODO: find a way to skip product type getters
     if (val->type->num_args > 0 || isupper(ctx->mod_src->table.names[i][0])) {
       continue;
     }
+
     if (val->type->meta == TYPE_FUNC) {
+      // skip product getters, which are compiled with their type
+      int is_product_getter = 0;
+      type_t* product = val->type->fields[0];
+      if (product->meta == TYPE_PRODUCT) {
+        for (int j = 0; j < product->num_fields; j++) {
+          if (strcmp(ctx->mod_src->table.names[i], product->field_names[j]) == 0) {
+            is_product_getter = 1;
+            break;
+          }
+        }
+      }
+      if (is_product_getter) {
+        continue;
+      }
+
       if (compile_type_fn(val->type) != 0) {
         val_print(ctx->mod_src->table.names[i], val, 0);
-        fprintf(stderr, "\nerror compile function type %s\n", ctx->mod_src->table.names[i]);
+        fprintf(stderr, "\nerror compile function type %s in %s\n", ctx->mod_src->table.names[i], ctx->mod_src->name);
         return 1;
       }
       if (str_includes(ctx->mod_src->name, "/usr/local/lib/sith/c")) {

@@ -1,6 +1,8 @@
 ; ModuleID = 'main'
 source_filename = "main"
 
+%FILE = type opaque
+
 @"/usr/local/lib/sith/data/bool_False_Bool_False" = global i1 false
 @"/usr/local/lib/sith/data/bool_True_Bool_False" = global i1 true
 
@@ -13,6 +15,10 @@ declare i1 @"/usr/local/lib/sith/data/bool_not_Bool"(i1)
 declare i32 @puts(i8*)
 
 declare i32 @putchar(i32)
+
+declare %FILE* @fopen(i8*, i8*)
+
+declare i32 @fclose(%FILE*)
 
 define i32 @"examples/conditional_main"() {
 entry:

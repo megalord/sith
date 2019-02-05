@@ -7,9 +7,11 @@ typedef enum {
   TYPE_ALIAS,
   TYPE_HOLE,
   TYPE_FUNC,
+  TYPE_OPAQUE,
   TYPE_PARAM,
   TYPE_PRIM,
   TYPE_PRODUCT,
+  // TYPE_SYM,
   TYPE_SUM
 } meta_type_t;
 

@@ -108,7 +108,8 @@ typedef struct {
   char* mod;
 } found_val_t;
 
-int parse_type (module_t* module, node_t* node, type_t* type);
+int parse_type(module_t* mod, node_t* node, type_t* type);
+int parse_deftype (module_t* mod, type_t* type, node_t* node);
 int parse_type_func (module_t* mod, type_t* type, node_t* node);
 int parse_type_sum (module_t* mod, type_t* type, node_t* node);
 int parse_type_product (module_t* mod, type_t* type, node_t* node);

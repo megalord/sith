@@ -1,0 +1,10 @@
+(deftype (List a)
+  (* len I32
+     data a))
+
+;(: each (-> (-> a Void) (List a) Void))
+;(: map (-> (-> a b) (List a) (List b)))
+;(: filter (-> (-> a Bool) (List a) (List a)))
+;(: nth (-> (List a) I32 a))
+
+;(: ++ (-> (List a) (List a) (List a)))

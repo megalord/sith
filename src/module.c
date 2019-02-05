@@ -43,6 +43,28 @@ int module_cache_init () {
 
   MODULE_BUILTIN.num_types = type_builtins(&MODULE_BUILTIN.types);
   MODULE_BUILTIN.type_instances = type_new_i(MODULE_BUILTIN.max_type_instances);
+  MODULE_BUILTIN.table.num_symbols = 0;
+  MODULE_BUILTIN.table.max_symbols = 2;
+  MODULE_BUILTIN.table.names = malloc(sizeof(char*) * 2);
+  MODULE_BUILTIN.table.values = malloc(sizeof(val_t) * 2);
+
+  val_t* setf = malloc(sizeof(val_t));
+  setf->type = type_new();
+  type_t setf_ty = (type_t) {
+    .name = NULL,
+    .meta = TYPE_FUNC,
+    .num_fields = 4,
+    .field_names = NULL,
+    .num_args = 4,
+    .args = (char*)"abcd"
+  };
+  setf_ty.fields = malloc(4 * sizeof(type_t*));
+  for (int i = 0; i < 4; i++) {
+    setf_ty.fields[i] = TYPE_HOLES + i;
+  }
+  memcpy(setf->type, &setf_ty, sizeof(type_t));
+  symbol_table_add(&MODULE_BUILTIN.table, (char*)"setf", setf);
+
   TYPE_CSTR = type_instance(TYPE_PTR, &TYPE_I8, type_instance_new(&MODULE_BUILTIN));
   return 0;
 }
@@ -94,13 +116,10 @@ int module_setup (module_t* module, node_t* root) {
   module->deps = malloc(module->num_deps * sizeof(module_t*));
   module->deps[0] = &MODULE_BUILTIN;
   module->types = type_new_i(module->num_types);
-  module->table.max_symbols = module->table.num_symbols;
+  module->table.max_symbols = (module->table.num_symbols == 0) ? 5 : module->table.num_symbols;
   module->num_type_instances = 0;
-  module->max_type_instances = 2;
+  module->max_type_instances = (module->num_types == 0) ? 0 : 2;
   module->type_instances = type_new_i(module->max_type_instances);
-  if (module->table.max_symbols == 0) {
-    module->table.max_symbols = 5;
-  }
   module->table.names = malloc(module->table.max_symbols * sizeof(char*));
   module->table.values = malloc(module->table.max_symbols * sizeof(val_t));
   return 0;
@@ -112,11 +131,47 @@ int module_parse_node (node_t* root, module_t* module) {
   }
 
   node_t* node = root->list->fst;
-  module_t** dep = module->deps + 1;
-  val_t* sym = module->table.values;
   int i_sym = 0;
   int i_type = 0;
   char* name;
+
+  // Must set all names before parsing types and values
+  // so that the parsing phase can link a type with later types.
+  for (int i = 0; i < root->list->len; i++) {
+    if (node->type != NODE_LIST) {
+      fprintf(stderr, "sub-root node must be a list\n");
+      return 1;
+    }
+    if (node->list->fst->type == NODE_ATOM) {
+      name = node->list->fst->atom->name;
+      if (strcmp(name, "deftype") == 0) {
+        node_t* name_node = node->list->fst->next;
+        if (name_node->type == NODE_ATOM) {
+          module->types[i_type].name = name_node->atom->name;
+        } else if (name_node->list->fst->type == NODE_ATOM) {
+          module->types[i_type].name = name_node->list->fst->atom->name;
+        } else {
+          fprintf(stderr, "invalid deftype form\n");
+          node_print(name_node, 0);
+          fprintf(stderr, "\n");
+          node_print(name_node->next, 0);
+          fprintf(stderr, "\n");
+          return 1;
+        }
+        i_type++;
+      } else if (strcmp(name, ":") == 0) {
+        module->table.names[i_sym] = node->list->fst->next->atom->name;
+        i_sym++;
+      }
+    }
+    node = node->next;
+  }
+
+  module_t** dep = module->deps + 1;
+  val_t* sym = module->table.values;
+  node = root->list->fst;
+  i_sym = 0;
+  i_type = 0;
   for (int i = 0; i < root->list->len; i++) {
     if (node->type != NODE_LIST) {
       fprintf(stderr, "sub-root node must be a list\n");
@@ -131,21 +186,11 @@ int module_parse_node (node_t* root, module_t* module) {
         }
         dep++;
       } else if (strcmp(name, "deftype") == 0) {
-        // parse_deftype(module, node, module->types + i_type);
-        node_t* name_node = node->list->fst->next;
-        if (name_node->type == NODE_ATOM) {
-          module->types[i_type].name = name_node->atom->name;
-          if (parse_type(module, name_node->next, module->types + i_type) != 0) {
-            return 1;
-          }
-        } else {
-          if (parse_type_template(module, name_node, module->types + i_type) != 0) {
-            return 1;
-          }
+        if (parse_deftype(module, module->types + i_type, node) != 0) {
+          return 1;
         }
         i_type++;
       } else if (strcmp(name, ":") == 0) {
-        module->table.names[i_sym] = node->list->fst->next->atom->name;
         sym->type = type_new();
         sym->type->name = NULL;
         if (parse_type(module, node->list->fst->next->next, sym->type) != 0) {
@@ -185,11 +230,11 @@ int module_parse_node (node_t* root, module_t* module) {
 int module_parse_file (char* filename, module_t* module) {
   node_t root;
   if (node_from_file(filename, &root) != 0) {
-    fprintf(stderr, "failed in lexing\n");
+    fprintf(stderr, "failed in lexing %s\n", module->name);
     return 1;
   }
   if (module_parse_node(&root, module) != 0) {
-    fprintf(stderr, "failed in parsing\n");
+    fprintf(stderr, "failed in parsing %s\n", module->name);
     return 1;
   }
   return 0;
@@ -300,6 +345,7 @@ int type_add_constructors (module_t* mod, type_t* type) {
     case TYPE_ALIAS:
     case TYPE_FUNC:
     case TYPE_HOLE:
+    case TYPE_OPAQUE:
     case TYPE_PARAM:
     case TYPE_PRIM:
       return 0;
@@ -353,6 +399,7 @@ found_val_t find_fn (module_t* module, symbol_table_t* table, char* name, type_t
   type_print(&type);
   puts("");
   module_print(module, 0);
+  module_print(module->deps[0], 0);
   return (found_val_t){ .mod = NULL, .val = NULL };
 }
 

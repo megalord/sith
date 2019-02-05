@@ -2,6 +2,7 @@
 source_filename = "main"
 
 %Maybe_I32 = type { i1, i32, i1 }
+%FILE = type opaque
 
 @"/usr/local/lib/sith/data/bool_False_Bool_False" = global i1 false
 @"/usr/local/lib/sith/data/bool_True_Bool_False" = global i1 true
@@ -10,6 +11,10 @@ source_filename = "main"
 declare i32 @puts(i8*)
 
 declare i32 @putchar(i32)
+
+declare %FILE* @fopen(i8*, i8*)
+
+declare i32 @fclose(%FILE*)
 
 declare i1 @"/usr/local/lib/sith/data/bool_and_Bool_Bool"(i1, i1)
 
