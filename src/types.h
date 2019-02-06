@@ -24,6 +24,7 @@ typedef struct type_t {
   char** field_names; // for sum or product types
   int num_args;
   char* args; // for type templates
+  struct type_t* template; // for type instances
   LLVMTypeRef llvm; // populated during compilation
 } type_t;
 
@@ -50,6 +51,7 @@ int type_has_holes (type_t* t);
 type_t* type_get_hole (char c);
 type_t* type_get_hole_builtin (char c);
 int type_builtins (type_t** types);
+int type_name (type_t* type, char* name, int size);
 void type_print (type_t* type);
 
 #endif

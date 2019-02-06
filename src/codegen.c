@@ -23,36 +23,8 @@ typedef void* (*fn_two_arg_t) (void*, void*);
 typedef void* (*fn_three_arg_t) (void*, void*, void*);
 
 
-char type_name[80];
+char TYPE_NAME_BUFFER[80];
 char fn_name_buffer[80];
-
-int type_instance_name_iter (char* str, int rem, type_t* type, type_t* template, int depth) {
-  int i = 0;
-  for (; i < (int)strlen(type->name); i++) {
-    assert(i < rem);
-    str[i] = type->name[i];
-  }
-  if (depth > 0) {
-    return i;
-  }
-  assert(i < rem);
-  for (int j = 0; j < type->num_fields; j++) {
-    if (template != NULL && template->fields[j]->meta != TYPE_HOLE) {
-      continue;
-    }
-    if (type->fields[j] != NULL) {
-      str[i++] = '_';
-      i += type_instance_name_iter(str + i, rem - i, type->fields[j], NULL, 1);
-    }
-  }
-  return i;
-}
-
-char* type_instance_name (type_t* type, type_t* template) {
-  int i = type_instance_name_iter(type_name, 80, type, template, 0);
-  type_name[i] = '\0';
-  return type_name;
-}
 
 char* val_name (char* mod, char* name, type_t* type) {
   int rem = 80;
@@ -125,7 +97,8 @@ char* fn_name_expr (expr_t* expr) {
 }
 
 int compile_type_product (type_t* type) {
-  type->llvm = LLVMStructCreateNamed(LLVMGetGlobalContext(), type_instance_name(type, NULL));
+  type_name(type, TYPE_NAME_BUFFER, 80);
+  type->llvm = LLVMStructCreateNamed(LLVMGetGlobalContext(), TYPE_NAME_BUFFER);
   LLVMTypeRef* types = malloc(type->num_fields * sizeof(LLVMTypeRef));
   for (int i = 0; i < type->num_fields; i++) {
     if (type->fields[i]->llvm == NULL && compile_type(type->fields[i]) != 0) {
@@ -151,7 +124,8 @@ int compile_type_sum (type_t* type) {
     return 0;
   }
 
-  type->llvm = LLVMStructCreateNamed(LLVMGetGlobalContext(), type_instance_name(type, NULL));
+  type_name(type, TYPE_NAME_BUFFER, 80);
+  type->llvm = LLVMStructCreateNamed(LLVMGetGlobalContext(), TYPE_NAME_BUFFER);
   LLVMTypeRef* types = malloc((type->num_fields + 1) * sizeof(LLVMTypeRef));
   types[0] = (type->num_fields <= 2) ? LLVMInt1Type() : LLVMInt8Type();
   for (int i = 0; i < type->num_fields; i++) {

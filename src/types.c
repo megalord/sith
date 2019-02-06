@@ -151,6 +151,7 @@ type_t* type_instance (type_t* template, type_t** args, type_t* instance) {
   instance->field_names = (template->field_names == NULL) ? NULL : malloc(instance->num_fields * sizeof(char*));
   instance->num_args = 0;
   instance->args = NULL;
+  instance->template = template;
 
   int num_args_applied = 0;
   for (int i = 0; i < instance->num_fields; i++) {
@@ -353,6 +354,68 @@ int type_builtins (type_t** types) {
   memcpy(TYPE_PTR, &type, sizeof(type_t));
 
   return num_types;
+}
+
+// Returns the number of locations written to the array (depth).
+// Has undefined behavior when field_loc isn't big enough.
+// This could just take both the type and template and return a type_t.
+int type_find_arg (type_t* type, char arg, int* field_loc) {
+  int j;
+  for (int i = 0; i < type->num_fields; i++) {
+    if (type->fields[i] == NULL) {
+      continue;
+    }
+    switch (type->fields[i]->meta) {
+      case TYPE_HOLE:
+        if (type->fields[i]->name[0] == arg) {
+          *field_loc = i;
+        }
+        return 1;
+      case TYPE_PRODUCT:
+      case TYPE_SUM:
+        j = type_find_arg(type->fields[i], arg, field_loc + 1);
+        if (j > 0) {
+          *field_loc = i;
+          return 1 + j;
+        }
+        continue;
+      default:
+        continue;
+    }
+  }
+  return 0;
+}
+
+int type_name (type_t* type, char* name, int size) {
+  int i_name = 0;
+  for (; i_name < (int)strlen(type->name); i_name++) {
+    assert(i_name < size);
+    name[i_name] = type->name[i_name];
+  }
+
+  if (type->template == NULL) {
+    return i_name;
+  }
+
+  int depth;
+  int loc[5];
+  type_t* field;
+  for (int i = 0; i < type->template->num_args; i++) {
+    depth = type_find_arg(type->template, type->template->args[i], loc);
+    assert(0 < depth && depth <= 5);
+    for (int j = 0; j < depth; j++) {
+      field = type->fields[loc[j]];
+      assert(field != NULL);
+    }
+
+    assert(i_name < size);
+    name[i_name++] = '_';
+
+    i_name += type_name(field, name + i_name, size - i_name);
+  }
+
+  name[i_name] = '\0';
+  return i_name;
 }
 
 void type_print (type_t* type) {
