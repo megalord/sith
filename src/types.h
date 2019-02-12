@@ -48,9 +48,13 @@ int type_fields_match (type_t** type_fields, type_t** arg_fields, int num_fields
 type_t** type_fn_get_return_args (type_t* fn_type, type_t** arg_types);
 int type_eq (type_t* a, type_t* b);
 int type_has_holes (type_t* t);
+int type_is_ptr (type_t* type, type_t* sub);
+type_t* type_ptr_get_pointee (type_t* type);
+
 type_t* type_get_hole (char c);
 type_t* type_get_hole_builtin (char c);
 int type_builtins (type_t** types);
+int type_find_field (type_t* type, char* name);
 int type_name (type_t* type, char* name, int size);
 void type_print (type_t* type);
 

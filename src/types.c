@@ -267,6 +267,9 @@ int type_add_instance_constructor (module_t* mod, type_t* src, type_t* desired) 
 }
 */
 
+// 0 -> not a match
+// 1 -> exact match
+// 2 -> template match
 int type_eq (type_t* a, type_t* b) {
   if (a == b) {
     return 1;
@@ -284,13 +287,20 @@ int type_eq (type_t* a, type_t* b) {
     return 0;
   }
 
+  int template_match = 0;
   for (int i = 0; i < a->num_fields; i++) {
-    if (type_eq(a->fields[i], b->fields[i]) == 0) {
-      return 0;
+    switch (type_eq(a->fields[i], b->fields[i])) {
+      case 0:
+        return 0;
+      case 1:
+        break;
+      case 2:
+        template_match = 1;
+        break;
     }
   }
 
-  return 1;
+  return template_match ? 2 : 1;
 }
 
 int type_count_holes (type_t* t) {
@@ -310,6 +320,26 @@ int type_has_holes (type_t* t) {
     }
   }
   return 0;
+}
+
+int type_is_ptr (type_t* type, type_t* sub) {
+  if (type->meta != TYPE_PARAM || strcmp(type->name, "Ptr") != 0) {
+    return 0;
+  }
+
+  if (sub == NULL) {
+    return 1;
+  }
+
+  return (type_eq(type->fields[0], sub) == 1) ? 1 : 0;
+}
+
+type_t* type_ptr_get_pointee (type_t* type) {
+  if (!type_is_ptr(type, NULL)) {
+    return NULL;
+  }
+
+  return type->fields[0];
 }
 
 type_t* type_get_hole_builtin (char c) {
@@ -354,6 +384,16 @@ int type_builtins (type_t** types) {
   memcpy(TYPE_PTR, &type, sizeof(type_t));
 
   return num_types;
+}
+
+int type_find_field (type_t* type, char* name) {
+  assert(type->meta == TYPE_PRODUCT);
+  for (int i = 0; i < type->num_fields; i++) {
+    if (strcmp(type->field_names[i], name) == 0) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 // Returns the number of locations written to the array (depth).

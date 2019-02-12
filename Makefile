@@ -35,7 +35,7 @@ variables: main
 	./examples/variables
 
 ir: main
-	for f in examples/*.sith; do \
+	for f in {examples,lib/c,lib/data}/*.sith; do \
 		echo "./main buildir $$f"; \
 		./main buildir $$f; \
 	done

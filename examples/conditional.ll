@@ -22,21 +22,24 @@ declare i32 @fclose(%FILE*)
 
 define i32 @"examples/conditional_main"() {
 entry:
-  %load_if_cond = load i1, i1* @"/usr/local/lib/sith/data/bool_True_Bool_False"
-  br i1 %load_if_cond, label %then, label %else
+  %load_global_var = load i1, i1* @"/usr/local/lib/sith/data/bool_True_Bool_False"
+  br i1 %load_global_var, label %then, label %else
 
 then:                                             ; preds = %entry
-  br i1 true, label %then1, label %else2
+  %load_global_var4 = load i1, i1* @"/usr/local/lib/sith/data/bool_False_Bool_False"
+  %load_global_var5 = load i1, i1* @"/usr/local/lib/sith/data/bool_False_Bool_False"
+  %eq = icmp eq i1 %load_global_var4, %load_global_var5
+  br i1 %eq, label %then1, label %else2
 
 else:                                             ; preds = %entry
   %0 = alloca [6 x i8], i8 1
   store [6 x i8] c"false\00", [6 x i8]* %0
   %1 = bitcast [6 x i8]* %0 to i8*
-  %puts5 = call i32 @puts(i8* %1)
+  %puts7 = call i32 @puts(i8* %1)
   br label %if_cont
 
 if_cont:                                          ; preds = %else, %if_cont3
-  %iftmp6 = phi i32 [ %iftmp, %if_cont3 ], [ %puts5, %else ]
+  %iftmp8 = phi i32 [ %iftmp, %if_cont3 ], [ %puts7, %else ]
   ret i32 0
 
 then1:                                            ; preds = %then
@@ -50,10 +53,10 @@ else2:                                            ; preds = %then
   %4 = alloca [6 x i8], i8 1
   store [6 x i8] c"false\00", [6 x i8]* %4
   %5 = bitcast [6 x i8]* %4 to i8*
-  %puts4 = call i32 @puts(i8* %5)
+  %puts6 = call i32 @puts(i8* %5)
   br label %if_cont3
 
 if_cont3:                                         ; preds = %else2, %then1
-  %iftmp = phi i32 [ %puts, %then1 ], [ %puts4, %else2 ]
+  %iftmp = phi i32 [ %puts, %then1 ], [ %puts6, %else2 ]
   br label %if_cont
 }

@@ -309,6 +309,61 @@ int parse_match (module_t* module, symbol_table_t* table, node_t* node, expr_t* 
   return 0;
 }
 
+int validate_setf (expr_t* expr) {
+  if (expr->num_params == 2) {
+    fprintf(stderr, "setf with two args not implemented yet\n");
+    return 1;
+  } else if (expr->num_params == 3) {
+    // Ultimately must determine and set the type of the third argument
+    type_t* product = expr->params[0].type;
+    if (product->meta != TYPE_PRODUCT) {
+      product = type_ptr_get_pointee(product);
+    }
+    if (product == NULL || product->meta != TYPE_PRODUCT) {
+      fprintf(stderr, "invalid setf: first arg must be product type, got ");
+      type_print(product);
+      fprintf(stderr, "\n");
+      return 1;
+    }
+
+    expr_t key = expr->params[1];
+    if (key.form != EXPR_CONST && key.type != TYPE_CSTR) {
+      fprintf(stderr, "invalid setf: arg 2 must be a const string\n");
+      expr_print(&key, 0);
+      return 1;
+    }
+
+    int field_index = type_find_field(product, (char*)key.cnst->data);
+    if (field_index == -1) {
+      fprintf(stderr, "invalid setf: field %s not in product type %s", (char*)key.cnst->data, product->name);
+      type_print(key.type);
+      fprintf(stderr, "\n");
+      return 1;
+    }
+
+    type_t* desired = product->fields[field_index];
+    switch (type_eq(desired, expr->params[2].type)) {
+      case 0:
+        fprintf(stderr, "invalid setf: field %s has type ", (char*)key.cnst->data);
+        type_print(expr->params[2].type);
+        fprintf(stderr, " cannot be set to ");
+        type_print(desired);
+        fprintf(stderr, "\n");
+        return 1;
+      case 1:
+        return 0;
+      case 2:
+        expr->params[2].type = desired;
+        return 0;
+    }
+
+  } else {
+    fprintf(stderr, "setf got %d params, 2 or 3 expected\n", expr->num_params);
+    return 1;
+  }
+  return 0;
+}
+
 int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t* expr) {
   expr->fn_name = list->fst->atom->name;
   expr->num_params = list->len - 1;
@@ -340,8 +395,12 @@ int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t
   expr->fn = res.val;
   expr->fn_mod = res.mod;
 
-  expr->type = type_fn_get_return(module, expr->fn->type, args);
-  return 0;
+  if (strcmp(expr->fn_name, "setf") == 0) {
+    return validate_setf(expr);
+  } else {
+    expr->type = type_fn_get_return(module, expr->fn->type, args);
+    return 0;
+  }
 }
 
 int parse_expr (module_t* module, symbol_table_t* table, node_t* node, expr_t* expr) {

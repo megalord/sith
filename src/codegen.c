@@ -433,9 +433,37 @@ int compile_switch (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMVal
   return 0;
 }
 
-int compile_setf (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMValueRef* result) {
-  fprintf(stderr, "compile_setf not implemented\n");
-  return 1;
+int compile_setf (context_t* ctx, expr_t* expr, LLVMValueRef* args, LLVMValueRef* result) {
+  if (expr->num_params == 2) {
+    *result = LLVMBuildStore(ctx->builder, args[1], args[0]);
+  } else if (expr->num_params == 3) {
+    char* key = (char*)expr->params[1].cnst->data;
+    type_t* product = expr->params[0].type;
+    if (product->meta == TYPE_PRODUCT) {
+      int field_index = type_find_field(product, key);
+      assert(field_index != -1);
+
+      *result = LLVMBuildInsertValue(ctx->builder, args[0], args[2], field_index, key);
+    } else {
+      product = type_ptr_get_pointee(product);
+      assert(product != NULL);
+
+      int field_index = type_find_field(product, key);
+      assert(field_index != -1);
+
+      LLVMValueRef gep_indices[2] = {
+        // The first operand indexes through the pointer
+        LLVMConstInt(LLVMInt32Type(), 0, false),
+        LLVMConstInt(LLVMInt32Type(), field_index, false)
+      };
+      LLVMValueRef ptr = LLVMBuildGEP(ctx->builder, args[0], gep_indices, 2, key);
+      *result = LLVMBuildStore(ctx->builder, args[2], ptr);
+    }
+  } else {
+    fprintf(stderr, "compile_setf got %d params, 2 or 3 expected\n", expr->num_params);
+    return 1;
+  }
+  return 0;
 }
 
 int compile_funcall (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMValueRef* result) {
@@ -454,7 +482,7 @@ int compile_funcall (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMVa
     *result = LLVMBuildICmp(ctx->builder, LLVMIntEQ, args[0], args[1], "eq");
     return 0;
   } else if (strcmp(expr->fn_name, "setf") == 0) {
-    if (compile_setf(ctx, table, expr, result) != 0) {
+    if (compile_setf(ctx, expr, args, result) != 0) {
       fprintf(stderr, "error compile_funcall\n");
       return 1;
     }
@@ -502,12 +530,15 @@ int compile_expr (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMValue
       return compile_switch(ctx, table, expr, result);
     case EXPR_VAR:
       if (expr->var->llvm == NULL) {
-        *result = LLVMGetNamedGlobal(ctx->mod_llvm, val_name(expr->var_mod, expr->var_name, expr->var->type));
+        char* global_name = val_name(expr->var_mod, expr->var_name, expr->type);
+        *result = LLVMGetNamedGlobal(ctx->mod_llvm, global_name);
         // variables set to global values will not have their own global
         if (*result == NULL) {
-          fprintf(stderr, "global value %s not found\n", expr->var_name);
+          fprintf(stderr, "global value %s not found (searched %s)\n", expr->var_name, global_name);
           return 1;
         }
+        assert(LLVMGetTypeKind(LLVMTypeOf(*result)) == LLVMPointerTypeKind);
+        *result = LLVMBuildLoad(ctx->builder, *result, "load_global_var");
       } else {
         *result = expr->var->llvm;
       }
@@ -570,14 +601,14 @@ int compile_type_sum_constructor (context_t* ctx, type_t* type, type_t* field, i
   LLVMBuilderRef builder = LLVMCreateBuilder();
   LLVMPositionBuilderAtEnd(builder, entry);
 
-  LLVMValueRef gep_indices[2], ptr;
   LLVMValueRef result = LLVMBuildAlloca(builder, type->llvm, type->name);
 
-  // The first operand indexes through the pointer
-  gep_indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
-
-  gep_indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
-  ptr = LLVMBuildGEP(builder, result, gep_indices, 2, "sum");
+  LLVMValueRef gep_indices[2] = {
+    // The first operand indexes through the pointer
+    LLVMConstInt(LLVMInt32Type(), 0, false),
+    LLVMConstInt(LLVMInt32Type(), 0, false)
+  };
+  LLVMValueRef ptr = LLVMBuildGEP(builder, result, gep_indices, 2, "sum");
   LLVMBuildStore(builder, LLVMConstInt(LLVMStructGetTypeAtIndex(type->llvm, 0), index, false), ptr);
 
   for (int i = 0; i < type->num_fields; i++) {
