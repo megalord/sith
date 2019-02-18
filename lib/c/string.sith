@@ -1,2 +1,2 @@
-(: memcpy (-> (Ptr I8) (Ptr I8) Size))
-(: strncat (-> (Ptr I8) (Ptr I8) Size))
+(: memcpy (-> (Ptr Void) (Ptr Void) I32 (Ptr Void)))
+(: strncat (-> (Ptr I8) (Ptr I8) I32))

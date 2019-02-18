@@ -159,7 +159,7 @@ int read_atom (stream_t* stream, atom_t* atom) {
       stream_read(stream);
       break;
     default:
-      if ('0' <= c && c <= '9') {
+      if (('0' <= c && c <= '9') || c == '-') {
         atom->type = ATOM_INT;
       } else {
         atom->type = ATOM_IDENTIFIER;

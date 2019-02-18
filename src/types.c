@@ -348,7 +348,7 @@ type_t* type_get_hole_builtin (char c) {
 }
 
 int type_builtins (type_t** types) {
-  int num_types = 26 + 3;
+  int num_types = 26 + 4;
   type_t type;
   *types = type_new_i(num_types);
 
@@ -370,6 +370,10 @@ int type_builtins (type_t** types) {
   TYPE_I32 = *types + i;
   type = (type_t) { .name = (char*)"I32",  .meta = TYPE_PRIM,  .num_fields = 0 };
   memcpy(TYPE_I32, &type, sizeof(type_t));
+  i++;
+
+  type = (type_t) { .name = (char*)"Void", .meta = TYPE_PRIM,  .num_fields = 0 };
+  memcpy(*types + i, &type, sizeof(type_t));
   i++;
 
   TYPE_PTR = *types + i;
@@ -394,6 +398,15 @@ int type_find_field (type_t* type, char* name) {
     }
   }
   return -1;
+}
+
+int type_sum_has_data (type_t* type) {
+  for (int i = 0; i < type->num_fields; i++) {
+    if (type->fields[0] != NULL) {
+      return 1;
+    }
+  }
+  return 0;
 }
 
 // Returns the number of locations written to the array (depth).

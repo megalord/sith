@@ -1,7 +1,10 @@
+(include "data/maybe")
+
 (deftype FILE)
 
 (: puts (-> (Ptr I8) I32))
 (: putchar (-> I32 I32))
 
-(: fopen (-> (Ptr I8) (Ptr I8) (Ptr FILE)))
+(: fopen (-> (Ptr I8) (Ptr I8) (Maybe (Ptr FILE))))
+(: fgetc (-> (Ptr FILE) I8))
 (: fclose (-> (Ptr FILE) I32))

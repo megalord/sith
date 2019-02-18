@@ -5,8 +5,8 @@
 ;; (deftype Str (List '(Ptr I8)))
 
 (deftype Str
-  (* data (Ptr I8)
-     len I32))
+  (* len I32
+     data (Ptr I8)))
 
 (: print (-> Str I32))
 (defun (print str)

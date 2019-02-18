@@ -28,14 +28,15 @@ expr_t* expr_new_i (int i) {
 int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* val) {
   switch (atom->type) {
     case ATOM_CHAR:
-      fprintf(stderr, "ATOM_CHAR not supported\n");
-      return 1;
+      val->type = TYPE_I8; // TODO: TYPE_CHAR once aliases work
+      val->data = atom->name;
+      break;
     case ATOM_IDENTIFIER:
       // value resolved in next phase
       fprintf(stderr, "ATOM_IDENTIFIER not supported\n");
       return 1;
     case ATOM_INT:
-      val->type = TYPE_I32;
+      val->type = TYPE_I8;
       val->data = malloc(sizeof(int));
       *(int*)val->data = (int)atoi(atom->name);
       if (val->data == 0 && strcmp(atom->name, "0") != 0) {
@@ -152,9 +153,17 @@ int parse_switch (module_t* module, symbol_table_t* table, list_t* list, expr_t*
       case NODE_ATOM:
         curr_val_list->len = 1;
         curr_val_list->vals = malloc(sizeof(val_t));
-        // TODO: handle else
-        if (parse_atom(module, table, sub_node->atom, curr_val_list->vals) != 0) {
-          return 1;
+        if (strcmp(sub_node->atom->name, "else") == 0) {
+          if (i != expr->num_cases - 1) {
+            fprintf(stderr, "invalid case: 'else' must come last\n");
+            return 1;
+          }
+          expr->num_cases--;
+          expr->else_body = curr_expr;
+        } else {
+          if (parse_atom(module, table, sub_node->atom, curr_val_list->vals) != 0) {
+            return 1;
+          }
         }
         break;
       case NODE_LIST:
@@ -345,9 +354,9 @@ int validate_setf (expr_t* expr) {
     switch (type_eq(desired, expr->params[2].type)) {
       case 0:
         fprintf(stderr, "invalid setf: field %s has type ", (char*)key.cnst->data);
-        type_print(expr->params[2].type);
-        fprintf(stderr, " cannot be set to ");
         type_print(desired);
+        fprintf(stderr, " cannot be set to ");
+        type_print(expr->params[2].type);
         fprintf(stderr, "\n");
         return 1;
       case 1:
@@ -455,6 +464,7 @@ int parse_expr (module_t* module, symbol_table_t* table, node_t* node, expr_t* e
         expr->case_cond = expr_new();
         expr->num_cases = node->list->len - 2;
         expr->case_bodies = expr_new_i(expr->num_cases);
+        expr->else_body = NULL;
         expr->case_vals = malloc(sizeof(val_list_t) * expr->num_cases);
         return parse_switch(module, table, node->list, expr);
       } else if (strcmp(name, "match") == 0) {

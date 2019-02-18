@@ -39,7 +39,7 @@ typedef struct expr_t {
     // EXPR_PROGN
     struct { int num_exprs; struct expr_t* exprs; };
     // EXPR_SWITCH
-    struct { int num_cases; struct expr_t *case_cond, *case_bodies; struct val_list_t* case_vals; };
+    struct { int num_cases; struct expr_t *case_cond, *case_bodies, *else_body; struct val_list_t* case_vals; };
     // EXPR_VAR
     struct { char* var_mod; char* var_name; struct val_t* var; };
   };

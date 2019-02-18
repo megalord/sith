@@ -54,6 +54,7 @@ type_t* type_ptr_get_pointee (type_t* type);
 type_t* type_get_hole (char c);
 type_t* type_get_hole_builtin (char c);
 int type_builtins (type_t** types);
+int type_sum_has_data (type_t* type);
 int type_find_field (type_t* type, char* name);
 int type_name (type_t* type, char* name, int size);
 void type_print (type_t* type);

@@ -111,15 +111,7 @@ int compile_type_product (type_t* type) {
 }
 
 int compile_type_sum (type_t* type) {
-  int has_data = 0;
-  for (int i = 0; i < type->num_fields; i++) {
-    if (type->fields[0] != NULL) {
-      has_data = 1;
-      break;
-    }
-  }
-
-  if (!has_data) {
+  if (!type_sum_has_data(type)) {
     type->llvm = (type->num_fields <= 2) ? LLVMInt1Type() : LLVMInt8Type();
     return 0;
   }
@@ -194,6 +186,9 @@ int compile_type (type_t* type) {
         return 0;
       } else if (strcmp(type->name, "I32") == 0) {
         type->llvm = LLVMInt32Type();
+        return 0;
+      } else if (strcmp(type->name, "Void") == 0) {
+        type->llvm = LLVMVoidType();
         return 0;
       } else {
         fprintf(stderr, "cannot compile type %s\n", type->name);
@@ -482,11 +477,7 @@ int compile_funcall (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMVa
     *result = LLVMBuildICmp(ctx->builder, LLVMIntEQ, args[0], args[1], "eq");
     return 0;
   } else if (strcmp(expr->fn_name, "setf") == 0) {
-    if (compile_setf(ctx, expr, args, result) != 0) {
-      fprintf(stderr, "error compile_funcall\n");
-      return 1;
-    }
-    return 0;
+    return compile_setf(ctx, expr, args, result);
   }
 
   LLVMValueRef fn = expr->fn->llvm;
