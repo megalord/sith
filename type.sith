@@ -1,0 +1,41 @@
+(deftype (Maybe a) (+ (Just a) None)) ; struct {I8, a}
+
+(deftype Car
+ (+ (Sedan I8)
+    (Truck I8 I8))) ; struct {I8, I8, I8}
+
+
+(deftype AtomType (+ ATOM_CHAR ATOM_IDENTIFIER ATOM_INT ATOM_STRING))
+(deftype Node
+  (+ (Atom Str AtomType I8 I8)
+     (List I8 (Ptr Node))))
+
+(deftype Atom
+  (* name Str
+     type AtomType
+     line I8
+     pos  I8))
+(deftype NodeList
+  (* len I8
+     fst (Maybe Node)))
+(deftype Node (+ Atom NodeList))
+
+(deftype Node
+  (* data   Atom
+     next   (Maybe Node)
+     num_c  I8
+     child  (Maybe Node)))
+
+(match n
+  ((Atom a) ...)
+  ((List l) ...))
+
+(deftype Expr
+  (* type Type
+     (+ (* cnst       Value)            ; constant
+        (* fn_name    Str               ; funcall
+           fn         Value
+           num_params I8
+           params     (Ptr Expr))
+        (* let_table (Ptr SymbolTable)  ; let
+           let_body  (Ptr Expr)))))

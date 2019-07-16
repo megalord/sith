@@ -41,13 +41,23 @@ int module_cache_init () {
   cache.max = 10;
   cache.modules = malloc(cache.max * sizeof(module_t));
 
-  MODULE_BUILTIN.num_types = type_builtins(&MODULE_BUILTIN.types);
-  MODULE_BUILTIN.type_instances = type_new_i(MODULE_BUILTIN.max_type_instances);
-  MODULE_BUILTIN.table.num_symbols = 0;
-  MODULE_BUILTIN.table.max_symbols = 2;
-  MODULE_BUILTIN.table.names = malloc(sizeof(char*) * 2);
-  MODULE_BUILTIN.table.values = malloc(sizeof(val_t) * 2);
+  //MODULE_BUILTIN.num_types = type_builtins(&MODULE_BUILTIN.types);
+  //MODULE_BUILTIN.type_instances = type_new_i(MODULE_BUILTIN.max_type_instances);
+  //MODULE_BUILTIN.table.num_symbols = 0;
+  //MODULE_BUILTIN.table.max_symbols = 3;
+  //MODULE_BUILTIN.table.names = malloc(sizeof(char*) * 3);
+  //MODULE_BUILTIN.table.values = malloc(sizeof(val_t) * 3);
 
+  if (module_parse_file((char*)"/usr/local/lib/sith/builtin.sith", &MODULE_BUILTIN) != 0) {
+    return 1;
+  }
+  MODULE_BUILTIN.num_deps = 0; // parser assigns builtin as dep
+  free(MODULE_BUILTIN.deps);
+  MODULE_BUILTIN.num_types = type_builtins(&MODULE_BUILTIN.types);
+  MODULE_BUILTIN.max_type_instances = 20;
+  MODULE_BUILTIN.type_instances = type_new_i(MODULE_BUILTIN.max_type_instances);
+
+  /*
   val_t* setf = malloc(sizeof(val_t));
   setf->type = type_new();
   type_t setf_ty = (type_t) {
@@ -64,6 +74,42 @@ int module_cache_init () {
   }
   memcpy(setf->type, &setf_ty, sizeof(type_t));
   symbol_table_add(&MODULE_BUILTIN.table, (char*)"setf", setf);
+
+  val_t* setp = malloc(sizeof(val_t));
+  setp->type = type_new();
+  type_t setp_ty = (type_t) {
+    .name = NULL,
+    .meta = TYPE_FUNC,
+    .num_fields = 3,
+    .field_names = NULL,
+    .num_args = 1,
+    .args = (char*)"a"
+  };
+  setp_ty.fields = malloc(3 * sizeof(type_t*));
+  setp_ty.fields[0] = TYPE_PTR;
+  setp_ty.fields[1] = TYPE_HOLES;
+  setp_ty.fields[2] = TYPE_VOID;
+  memcpy(setp->type, &setp_ty, sizeof(type_t));
+  symbol_table_add(&MODULE_BUILTIN.table, (char*)"setp", setp);
+
+  val_t* alloc = malloc(sizeof(val_t));
+  alloc->type = type_new();
+  type_t alloc_ty = (type_t) {
+    .name = NULL,
+    .meta = TYPE_FUNC,
+    .num_fields = 3,
+    .field_names = NULL,
+    .num_args = 1,
+    .args = (char*)"a"
+  };
+  alloc_ty.fields = malloc(3 * sizeof(type_t*));
+  alloc_ty.fields[0] = TYPE_HOLES;
+  alloc_ty.fields[1] = TYPE_I32;
+  alloc_ty.fields[2] = TYPE_PTR;
+  memcpy(alloc->type, &alloc_ty, sizeof(type_t));
+  symbol_table_add(&MODULE_BUILTIN.table, (char*)"alloc", alloc);
+  */
+
 
   TYPE_CSTR = type_instance(TYPE_PTR, &TYPE_I8, type_instance_new(&MODULE_BUILTIN));
   return 0;

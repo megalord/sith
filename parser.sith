@@ -1,0 +1,13 @@
+(deftype Expr
+  (+ (ExprConst Value)
+     (ExprFuncall
+       (* name   Str
+          fn     Value
+          params (List Expr)))
+     (ExprIf
+       (* cond  (Ptr Expr)
+          if_   (Ptr Expr)
+          else_ (Ptr Expr)))
+     (ExprLet
+       (* table Table
+          body  (Ptr Expr)))))

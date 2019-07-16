@@ -36,7 +36,7 @@ int parse_atom (module_t* module, symbol_table_t* table, atom_t* atom, val_t* va
       fprintf(stderr, "ATOM_IDENTIFIER not supported\n");
       return 1;
     case ATOM_INT:
-      val->type = TYPE_I8;
+      val->type = TYPE_I32;
       val->data = malloc(sizeof(int));
       *(int*)val->data = (int)atoi(atom->name);
       if (val->data == 0 && strcmp(atom->name, "0") != 0) {
@@ -380,8 +380,23 @@ int parse_funcall (module_t* module, symbol_table_t* table, list_t* list, expr_t
 
   type_t** args = malloc((expr->num_params + 1) * sizeof(type_t*));
   node_t* node = list->fst->next;
-  int i;
-  for (i = 0; i < expr->num_params; i++) {
+  int i = 0;
+  if (strcmp(expr->fn_name, "alloc") == 0) {
+    // The first expression won't parse because it is a type, not a value.
+    if (node->type != NODE_ATOM) {
+      fprintf(stderr, "parse alloc type arg must be an atom\n");
+      return 1;
+    }
+    expr->params[i].type = type_find(module, node);
+    if (expr->params[i].type == NULL) {
+      fprintf(stderr, "parse alloc cannot find type %s\n", node->atom->name);
+      return 1;
+    }
+    args[i] = expr->params[i].type;
+    i++;
+    node = node->next;
+  }
+  for (; i < expr->num_params; i++) {
     if (parse_expr(module, table, node, expr->params + i) != 0) {
       return 1;
     }

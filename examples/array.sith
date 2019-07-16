@@ -1,0 +1,10 @@
+(include "c/stdio")
+(include "data/array")
+
+
+(: main (-> I32))
+(defun (main)
+  (let ((xs (alloc I8 4)))
+    (setf (+ (data xs) 0) 0)
+    (setf (nth xs 0) 0))
+  0)

@@ -428,6 +428,53 @@ int compile_switch (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMVal
   return 0;
 }
 
+int compile_alloc (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMValueRef* result) {
+  if (expr->num_params != 2) {
+    fprintf(stderr, "alloc got %d params, 2 expected", expr->num_params);
+    return 1;
+  }
+
+  expr_t num = expr->params[0];
+  if (num.form != EXPR_CONST || num.type != TYPE_I32) {
+    fprintf(stderr, "alloc arg must be const int\n");
+    return 1;
+  }
+
+  int count = (int)num.cnst->data;
+
+  expr_t constructor = expr->params[1];
+  if (constructor.form != EXPR_FUNCALL) {
+    fprintf(stderr, "alloc only works for functions\n");
+    return 1;
+  }
+
+  if (strcmp(constructor.fn_name, constructor.type->name) != 0) {
+    fprintf(stderr, "alloc only works for type constructors, got %s\n", constructor.fn_name);
+    return 1;
+  }
+
+  int size = LLVMABISizeOfType(ctx->data_layout, constructor.type->llvm);
+  LLVMValueRef total_size = LLVMConstInt(LLVMInt32Type(), count * size, false);
+  LLVMValueRef fn_malloc = LLVMGetNamedFunction(ctx->mod_llvm, "malloc");
+  LLVMValueRef mem = LLVMBuildCall(ctx->builder, fn_malloc, &total_size, 1, "malloc");
+
+  type_t* ret = constructor.type;
+  if (ret->meta == TYPE_FUNC) {
+     ret = ret->fields[ret->num_fields - 1];
+     // type_fn_get_return(ctx->mod, constructor.type, map(params, .type));
+  }
+  if (ret->num_args > 0) {
+    fprintf(stderr, "alloc type has holes\n");
+    return 1;
+  }
+  *result = LLVMBuildBitCast(ctx->builder, mem, LLVMPointerType(ret->llvm, 0), "malloc_mem_cast");
+  // This is for the alternate form that won't require setf's
+  //LLVMValueRef fn_memcpy = LLVMGetNamedFunction(ctx->mod_llvm, "memcpy");
+  //args[0] = *result;
+  //LLVMBuildCall(ctx->builder, fn_memcpy, args, 3, "memcpy");
+  return 0;
+}
+
 int compile_setf (context_t* ctx, expr_t* expr, LLVMValueRef* args, LLVMValueRef* result) {
   if (expr->num_params == 2) {
     *result = LLVMBuildStore(ctx->builder, args[1], args[0]);
@@ -462,6 +509,11 @@ int compile_setf (context_t* ctx, expr_t* expr, LLVMValueRef* args, LLVMValueRef
 }
 
 int compile_funcall (context_t* ctx, symbol_table_t* table, expr_t* expr, LLVMValueRef* result) {
+  // functions that must compile their own args with a special order
+  if (strcmp(expr->fn_name, "alloc") == 0) {
+    return compile_alloc(ctx, table, expr, result);
+  }
+
   LLVMValueRef* args = malloc(expr->num_params * sizeof(LLVMValueRef));
   for (int i = 0; i < expr->num_params; i++) {
     if (compile_expr(ctx, table, expr->params + i, args + i) != 0) {

@@ -1,0 +1,7 @@
+(: setf (-> a b c d))
+(: setp (-> (Ptr a) a Void))
+(: alloc (-> a I32 (Ptr a)))
+
+(: + (-> I32 I32 I32))
+(: + (-> (Ptr a) I32 (Ptr a)))
+(: + (-> I32 (Ptr a) (Ptr a)))

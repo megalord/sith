@@ -1,0 +1,7 @@
+(include "data/list")
+(include "data/maybe")
+(include "data/str")
+
+(deftype Cons
+  (* car (+ (List (Ptr Cons)) (Atom (Ptr Str)))
+     cdr (Maybe (Ptr Cons))))

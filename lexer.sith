@@ -1,0 +1,88 @@
+(include "c/stdio")
+;(include "data/cons")
+(include "data/bool")
+(include "data/maybe")
+(include "data/str")
+
+(deftype Cons
+  (* car (+ (List (Ptr Cons)) (Atom (Ptr Str)))
+     cdr (Maybe (Ptr Cons))))
+
+(deftype Buffer
+  (* rem I32
+     size I32
+     data Str))
+
+(deftype Stream
+  (* source (Ptr FILE)
+     next (Maybe I8)))
+
+(: stream-peek (-> Stream I8))
+(defun (stream-peek s)
+  (match (next s)
+    ((Just c) c)
+    (None
+      (let ((c (fgetc (source s))))
+        (setf s "next" (Just c))
+        c))))
+
+(: stream-read (-> Stream I8))
+(defun (stream-read s)
+  (match (next s)
+    ((Just c)
+      (progn
+        (setf s "next" None)
+        (Just c)))
+    (None (fgetc (source s)))))
+
+(: read-empty (-> Stream I8))
+(defun (read-empty s)
+  (let ((c (stream-peek s)))
+    (if (eq c -1)
+      -1
+      (if (or (eq c ' ') (eq c '\n'))
+        (progn
+          (stream-read s)
+          (read-empty s))
+        c))))
+
+(: read-comment (-> Stream I8))
+(defun (read-comment s)
+  (let ((c (stream-peek s)))
+    (if (or (eq c -1) (eq c '\n'))
+      0
+      (progn
+        (stream-read s)
+        (read-comment s)))))
+
+(: read-atom (-> Stream (Maybe (Ptr Str))))
+
+(: read-list (-> Stream (Maybe (Ptr Cons))))
+
+(: read-cell (-> Stream (Maybe (Ptr Cons))))
+(defun (read-cell s)
+  (read-empty s)
+  (cond (stream-peek s)
+    (';'
+      (progn
+        (read-comment s)
+        (read-cell s)))
+    ('(' (Cons
+           (List (read-list s))
+           None))
+    (else (Cons (Atom read-atom s) None))))
+
+;;(: stream->node (-> Stream (Maybe (Ptr Cons))))
+;;(defun (stream->node stream)
+;;  (let ((root (Cons x y)))
+;;    ))
+
+(: filename->node (-> Str (Maybe (Ptr Cons))))
+(defun (filename->node filename)
+  (let (mf (fopen filename "r"))
+    ;(defer (fclose mf))
+    (match mf
+      ((Just f) (stream->node (Stream f -2)))
+      (None     None))))
+;; (>= (fopen filename "r") stream->node)
+;; (~> (fopen filename "r") (lambda (f) (Just (Stream f -2))) stream->node)

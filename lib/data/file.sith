@@ -1,0 +1,18 @@
+(include "c/stdio")
+
+;(deftype FILE)
+
+(: fopen (-> Str Str (Maybe (Ptr FILE))))
+(defun (fopen filename mode)
+  (f (fopen (data filename) (data mode))))
+
+(: fgetc (-> (Ptr FILE) (Maybe I8)))
+(defun (fgetc f)
+  (let ((c (fgetc f)))
+    (if (eq c -1) None (Just c))))
+
+(: fclose (-> (Ptr FILE) (Maybe Str)))
+(defun (fclose f)
+  (if (eq (fclose f) 0)
+    None
+    (Just "failed")))

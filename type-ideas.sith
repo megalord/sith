@@ -1,0 +1,139 @@
+(defun ((nil hello) (char *asdf) (int arg2))
+  (puts "hello world")
+  0)
+
+; NO
+(defun (nil hello char* asdf int arg2)
+  (puts "hello world")
+  0)
+
+(defun (read-atom stream    atom)
+       (->        stream_t* atom_t* int)
+  (whatev))
+
+; NO
+(defun ((:: read-atom (-> stream_t* atom_t* int))
+                          stream    atom)
+  (whatev))
+
+(: global char* "asdf")
+(def global : char* "asdf")
+(def (: global char*) "asdf")
+(def global char* "asdf")
+
+(deftype Buffer
+  (struct Integer rem
+          Integer size
+          String data))
+
+(deftype SymbolType (enum SYMBOL_VAR SYMBOL_FUNC))
+(deftype Symbol
+  (* String              name
+     (+ String Function) data))
+
+(deftype Node
+  (* (+ List Atom) data
+     Node          next))
+
+(deftype Node
+  (struct (: type NodeType)
+          (: atom Atom)
+          (buffer_t: list List)
+          (: next Node)))
+
+(deftype Func
+  (struct (: arity Int)
+          (: args Symbol*)
+          (: ret Symbol*)))
+(deftype Symbol
+  (struct (: name String)
+          (: )
+          ))
+(deftype Symbol (U Func Var))
+
+(deftype (Maybe a) (U (Just a) None))
+(deftype (List a)
+  (struct (: data a)
+          (: len Int)))
+(deftype Atom
+  (struct (: val String)
+          (: type (U CHAR IDENTIFIIER STRING))))
+(deftype Node (U Atom (List *Node)))
+
+(: atom? (-> Node Bool))
+(: list? (-> Node Bool))
+
+(: car (-> (List a) (Maybe a)))
+(: cdr (-> (List a) (Maybe (List a))))
+(: cons (-> (List a) a (List a)))
+
+(: >= (-> (Maybe a) (-> a (Maybe a)) (Maybe a)))
+
+; :: for kind
+(:: Node) ; *
+(:: Maybe) ; * -> *
+
+(deftype NodeType (+ NODE_LIST NODE_ATOM))
+(deftype Node
+  (struct (: type NodeType)
+          (: atom Atom)
+          (: list List)
+          (: next Node))
+
+(deftype Node
+  (struct NodeType type
+          Atom     atom
+          List     list
+          Node     next))
+
+(defmacro (def-buffer type)
+  (deftype (+ ,type Buffer)
+    (struct (: rem Integer)
+            (: size Integer)
+            (: data ,type))))
+(def-buffer String)
+
+(: filter (-> arr_t* (-> item_t* bool) arr_t*))
+(defun (filter arr fn))
+
+(: read-atom (-> stream_t* atom_t* int))
+(defun (read-atom stream atom)
+  (let ((: str char* "asdf")
+        (: curr node_t*)
+        ((: int i) 0))
+    (do-something-with i))
+  (whatev))
+
+
+(defclass Functor (-> a (Functor a))
+  (: <$> (-> (-> a b) (Functor a) (Functor b)))
+  )
+
+(defclass Monad (-> a (Monad a))
+  (: >= (-> (Monad a) (-> a (Monad a)) (Monad a)))
+  )
+
+(deftype Maybe (-> a (+ (Just a) None)))
+;; bind_maybe_a
+(defun (>= a f)
+  (cond a
+    ((Just x) (f x))
+    (None None)))
+
+(defun (~> f g)
+  (lambda (a)
+    (>= (>= a f) g)))
+
+(deftype (Either a b) (+ (Left a) (Right b)))
+
+
+(deftype Ptr (-> a (Ptr a)))
+(: + (-> (Ptr a) I32 (Ptr a)))
+(: + (-> I32 (Ptr a) (Ptr a)))
+
+(deftype (Ptr a))
+
+
+(defun (foo a) ...)
+(let ((foo (lambda (a) ...))))
+(def foo (lambda (a) ...))

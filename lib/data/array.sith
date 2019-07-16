@@ -3,6 +3,7 @@
      data a))
 
 ;(: each (-> (-> a Void) (Array a) Void))
+;(: each (-> (-> a I32 Void) (Array a) Void))
 ;(: map (-> (-> a b) (Array a) (Array b)))
 ;(: filter (-> (-> a Bool) (Array a) (Array a)))
 ;(: nth (-> (Array a) I32 a))
@@ -11,5 +12,42 @@
 
 (deftype (DynArray a)
   (* len I32
-     max I32
-     data a))
+     cap I32
+     data (Ptr a)))
+
+(: new-dyn (-> I32 DynArray))
+(defun (new-dyn l)
+  (DynArray l (- l 1) (malloc l)))
+
+(: array->dyn (-> (Array a) (DynArray a)))
+(defun (array->dyn a)
+  (DynArray (len a) (len a) (data a)))
+
+(: nth (-> (DynArray a) I32 a))
+(defun (nth a i)
+  (+ (data a) i))
+
+(: grow (-> (DynArray a) (DynArray a)))
+(defun (grow xs)
+  (setf xs "len" )
+  )
+
+(: grow (-> (DynArray a) I32 (DynArray a)))
+(defun (grow xs i)
+  )
+
+(: + (-> (DynArray a) a (DynArray a)))
+(defun (+ xs x)
+  (if (>= (len xs) (cap xs))
+    (+ (grow xs) x)
+    (progn
+      (setf (nth xs (len xs)) x)
+      (setf (len xs) (+ (len xs) 1))
+      xs)))
+
+(: ++ (-> (DynArray a) (DynArray a) (DynArray a)))
+(defun (++ xs ys)
+  (if (> (len ys) (- (cap xs) (len xs)))
+    (++ (grow xs (len ys)) ys)
+    (let ((start (+ (data xs) (len xs))))
+      (each (lambda (y i) (setf (+ start i) y)) ys))))

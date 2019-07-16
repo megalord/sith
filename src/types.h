@@ -31,6 +31,7 @@ typedef struct type_t {
 type_t* TYPE_HOLES;
 type_t* TYPE_I8;
 type_t* TYPE_I32;
+type_t* TYPE_VOID;
 type_t* TYPE_PTR;
 type_t* TYPE_CSTR;
 

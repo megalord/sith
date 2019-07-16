@@ -1,0 +1,11 @@
+(include "c/stdio")
+
+(: main (-> I32))
+(defun (main)
+  (let ((xs (alloc I32 2)))
+    (setp xs 10)
+    (setp (+ xs 1) 11)
+    (setp (+ xs 2) 12)
+    (putchar xs)
+    (putchar (+ xs 1))
+    (putchar (+ xs 2))))

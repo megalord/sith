@@ -372,8 +372,9 @@ int type_builtins (type_t** types) {
   memcpy(TYPE_I32, &type, sizeof(type_t));
   i++;
 
+  TYPE_VOID = *types + i;
   type = (type_t) { .name = (char*)"Void", .meta = TYPE_PRIM,  .num_fields = 0 };
-  memcpy(*types + i, &type, sizeof(type_t));
+  memcpy(TYPE_VOID, &type, sizeof(type_t));
   i++;
 
   TYPE_PTR = *types + i;
